@@ -188,36 +188,44 @@ def prepare_pyvis_network(visualization_data, mode, layout):
 - Export graph data (JSON, GraphML)
 - Generate LaTeX for mathematical papers
 
-## Questions for Visualization Design
+## Visualization Design Decisions
 
-1. **Mathematical Accuracy**: How strictly should visualizations follow category theory conventions (e.g., commutative diagram layout)?
+1. **Mathematical Conventions**: Commutative diagram layout priority
+   - Follow standard category theory diagram conventions
+   - Automatic layout algorithms optimized for mathematical clarity
+   - Manual adjustment capabilities for complex diagrams
 
-   Use commutative diagram layout.
+2. **Scale Management**: Pagination-based approach
+   - Maximum 100 entities per visualization view
+   - Chunk-based navigation for larger structures
+   - Overview mode showing simplified structure of large graphs
 
-2. **Scalability**: What's the maximum number of entities we should support in a single visualization?
+3. **Visual Transitions**: Animated mode switching
+   - Smooth transitions between visualization modes
+   - Progressive disclosure for complex structures
+   - Performance-optimized animations (disable for large graphs)
 
-   Constrain a single visulation to 100 entities. Support scrolling for viewing larger structure in 100 entity chunks.
+4. **Dimensionality**: 3D visualization support planned
+   - 3D rendering for complex natural transformations
+   - Toggle between 2D and 3D views
+   - Implementation deferred to post-MVP phase
 
-3. **Animation**: Should there be animated transitions when switching between visualization modes?
+5. **Collaboration**: Future extension target
+   - Annotation and collaborative editing planned for later versions
+   - Single-user focus for prototype maintains simplicity
+   - Architecture designed to support future multi-user features
 
-   Yes.
+6. **Accessibility**: Color blindness support included
+   - Alternative color schemes for common color vision deficiencies
+   - High contrast options available
+   - Shape and pattern variations supplement color coding
 
-4. **3D Visualization**: Would 3D visualization be helpful for complex functors or natural transformations?
+7. **Mathematical Notation**: LaTeX integration implemented
+   - Render mathematical symbols and expressions in node labels
+   - Export capabilities include LaTeX-formatted output
+   - MathJax integration for web display
 
-   Yes.
-
-5. **Collaborative Features**: Should visualizations support annotations or collaborative editing?
-
-   Not for this prototype, but we should consider this as a useful extension for future versions.
-
-6. **Accessibility**: What accessibility features are needed for the visualizations?
-
-   Please support alternate color schemes for color blindness.
-
-7. **Mathematical Notation**: Should the visualizations include LaTeX rendering for mathematical symbols?
-
-   Yes.
-
-8. **Performance Benchmarks**: What response time is acceptable for visualization generation?
-
-   10 seconds or less is ideal.
+8. **Performance Targets**: Sub-10-second generation
+   - Optimized rendering pipeline for responsive user experience
+   - Lazy loading for complex visualizations
+   - Progressive rendering for large graphs

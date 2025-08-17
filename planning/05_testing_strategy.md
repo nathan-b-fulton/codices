@@ -294,36 +294,44 @@ pytest tests/test_gui.py
 - [ ] Natural transformation naturality is verified
 - [ ] Composition operations work correctly
 
-## Questions for Testing Implementation
+## Testing Implementation Decisions
 
-1. **Test Data Complexity**: How mathematically complex should our test categories be?
+1. **Test Data Complexity**: Classical mathematical examples
+   - Use well-known categories (Set, Group, etc.) for test cases
+   - Simple, verifiable mathematical structures for validation
+   - Avoid overly complex examples that obscure test intent
 
-   They do not need to be complex. Classic examples are suitable.
+2. **Visual Testing**: Automated regression testing implemented
+   - Snapshot testing for PyVis HTML output
+   - Automated comparison of generated visualizations
+   - Performance regression detection for rendering times
 
-2. **Visual Testing**: Should we implement automated visual regression testing for PyVis outputs?
+3. **Property-Based Testing**: Hypothesis integration for mathematical laws
+   - Generate random category structures to test mathematical properties
+   - Validate composition associativity and identity laws
+   - Test functor preservation properties automatically
 
-   Yes.
+4. **Integration Testing**: Basic Streamlit-PyVis validation
+   - Test successful graph rendering without errors
+   - Verify reasonable response times (<10 seconds)
+   - Basic interactivity testing (node selection, layout changes)
 
-3. **Property-Based Testing**: Should we use `hypothesis` for property-based testing of mathematical laws?
+5. **User Acceptance Testing**: Internal validation only
+   - No external user testing for prototype phase
+   - Internal validation against mathematical correctness
+   - Focus on developer usability and functionality
 
-   Yes.
+6. **Performance Expectations**: Small graph optimization
+   - Target performance: <1000 nodes, <10000 edges
+   - Acceptable response times for prototype scale
+   - Performance monitoring without aggressive optimization
 
-4. **Integration Testing**: How thoroughly should we test Streamlit-PyVis integration?
+7. **Platform Testing**: Windows development focus
+   - Primary testing on Windows development environment
+   - Cross-platform compatibility deferred to future versions
+   - Documented known platform limitations
 
-   Only basic testing for successful rendering and reasonable responsiveness are needed.
-
-5. **User Acceptance Testing**: Should we create specific scenarios for mathematical researchers to validate?
-
-   No.
-
-6. **Performance Baselines**: What are realistic performance expectations for different graph sizes?
-
-   We don't know yet, but the use cases for the prototype involve comparatively small graphs (< 1000 nodes, < 10000 edges), and performance will probably not be an immediate concern.
-
-7. **Cross-Platform Testing**: Should tests verify behavior across different operating systems?
-
-   The prototype is being developed in Windows, and cross-platform testing is out of scope for now.
-
-8. **Browser Compatibility**: Should visualization testing cover multiple browsers?
-
-   It is sufficient to only cover Google Chrome for the prototype.
+8. **Browser Support**: Chrome-only testing
+   - Focus testing efforts on Google Chrome
+   - Other browser compatibility not validated for prototype
+   - Document browser requirements in user guide

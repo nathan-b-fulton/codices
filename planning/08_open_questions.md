@@ -1,4 +1,4 @@
-# Open Questions and Design Decisions
+# Design Decisions and Resolved Questions
 
 ## Critical Design Questions
 
@@ -185,28 +185,25 @@
 
 **Recommendation**: Implement Separate Views for prototype, iterate as needed.
 
-## Questions Requiring User Input
+## Strategic Decisions
 
-### 15. Target Users
-- **Academic Researchers**: Need mathematical rigor and export capabilities
-- **Students**: Need guided learning and validation
-- **Software Developers**: Need practical tools and performance
+### 15. Target User Focus: Students and learning
+- Primary users: Students learning category theory
+- Secondary consideration: Academic researchers needing basic tools
+- Educational features prioritized over advanced research capabilities
+- Clear explanations and guided workflows emphasized
 
-**Recommendation**: Focus on Students for prototype, iterate as needed.
+### 16. Primary Use Case: Teaching and learning tool
+- Educational clarity takes precedence over mathematical sophistication
+- Interactive exploration of category theory concepts
+- Visual learning support through effective diagrams
+- Practical tool aspects deferred to later versions
 
-### 16. Use Cases
-- **Teaching Tool**: Focus on clarity and educational features
-- **Research Tool**: Focus on mathematical accuracy and advanced features
-- **Practical Tool**: Focus on performance and workflow efficiency
-
-**Recommendation**: Focus on Teaching Tool for prototype, iterate as needed.
-
-### 17. Integration Requirements
-- **Standalone Application**: Self-contained tool
-- **Jupyter Integration**: Work well in notebook environments
-- **Web Deployment**: Support deployment to web servers
-
-**Recommendation**: Focus on Standalone Application for prototype, iterate as needed.
+### 17. Deployment Model: Standalone application
+- Self-contained tool for individual use
+- No cloud deployment requirements for prototype
+- Future integration with Jupyter and web deployment planned
+- Simplified installation and setup process
 
 ## Decision Framework
 
@@ -217,9 +214,13 @@ For each question, consider:
 4. **Mathematical Accuracy**: How does this affect correctness of mathematical operations?
 5. **Performance Impact**: How does this affect application performance?
 
-## Recommended Next Steps
+## Implementation Next Steps
 
-1. **User Research**: Conduct brief interviews with potential users to inform key decisions
-2. **Prototype Development**: Create minimal prototypes to test technical feasibility
-3. **Decision Documentation**: Document decisions made for each question
-4. **Iterative Planning**: Plan for iterative development with user feedback cycles
+Based on the resolved design decisions, the recommended development approach is:
+
+1. **Foundation Phase**: Implement enhanced DAL with full CRUD operations and transaction support
+2. **Core GUI Phase**: Build essential Streamlit interface with form-based editing
+3. **Visualization Phase**: Implement PyVis integration with multiple view modes
+4. **Enhancement Phase**: Add advanced features like undo/redo, bulk operations, and themes
+
+All decisions documented above provide clear direction for implementation while maintaining flexibility for future iterations.

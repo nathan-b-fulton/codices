@@ -107,28 +107,34 @@ rel_tables = {
    - Source and target functors must have same domain and codomain
    - Must respect functor mappings
 
-## Questions for Implementation
+## Implementation Decisions
 
-1. **Composition Storage**: How should morphism composition be stored? As explicit relationships or computed on-demand?
+1. **Composition Storage**: Hybrid approach selected
+   - Compute compositions on-demand with Streamlit caching
+   - Store frequently used compositions for performance
+   - Cache invalidation on morphism changes
 
-   Computed on-demand, but using Streamlit's caching decorators to avoid repeat computation.
+2. **Identity Morphisms**: Automatic management
+   - Created automatically when objects are added
+   - Deleted automatically when objects are removed
+   - User cannot directly edit identity morphisms
 
-2. **Identity Morphisms**: Should identity morphisms be automatically created and managed, or user-defined?
+3. **Functor Mappings**: Full explicit storage
+   - Every object and morphism mapping stored explicitly
+   - Uses same source/target relationship pattern as morphisms
+   - Enables detailed validation and visualization
 
-   Automatically created.
+4. **Validation Level**: Mathematical law enforcement
+   - DAL enforces structural constraints (foreign keys, uniqueness)
+   - Mathematical validation (associativity, identity) implemented as separate validation layer
+   - Validation can be bypassed for advanced users if needed
 
-3. **Functor Mappings**: How detailed should functor object/morphism mappings be stored?
+5. **Performance**: Comprehensive caching strategy
+   - Cache all read operations using Streamlit decorators
+   - Automatic cache invalidation on writes
+   - Manual cache reset option in advanced settings
 
-   Every component of a functor mapping should be explicitly stored, with the same source and target pattern as is used for morphisms.
-
-4. **Validation Level**: Should the DAL enforce mathematical laws (associativity, identity) or just structural constraints?
-
-   Yes, the DAL should enforce mathematical laws.
-
-5. **Performance**: Should we implement caching for frequently accessed category structures?
-
-   Yes.
-
-6. **Backup/Versioning**: Should the DAL support versioning or backup functionality for the graph database?
-
-  Support backups on-demand.
+6. **Backup/Versioning**: On-demand backup support
+   - Manual backup functionality through GUI
+   - Simple file-based backup system
+   - No automatic versioning for prototype

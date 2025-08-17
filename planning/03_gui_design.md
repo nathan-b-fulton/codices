@@ -223,36 +223,44 @@ st.session_state.form_mode = None  # "create", "edit", None
 - `st.warning()` for potential issues
 - `st.success()` for successful operations
 
-## Questions for GUI Implementation
+## GUI Implementation Decisions
 
-1. **Auto-save vs Manual Save**: Should form changes be auto-saved or require explicit save action?
+1. **Save Strategy**: Manual save with transaction support
+   - Changes stored in transaction state until explicit commit
+   - Prevents accidental data loss and enables preview functionality
+   - Clear visual feedback for unsaved changes
 
-   Only manual save (commit to kuzu) is required for this prototype.
+2. **Bulk Operations**: CSV-based bulk import/export
+   - Upload/download functionality for objects and morphisms
+   - Documented CSV format for data exchange
+   - Error reporting for invalid bulk data
 
-2. **Bulk Operations**: Should the GUI support bulk creation/editing of objects and morphisms?
+3. **Data Exchange**: GUI-integrated import/export
+   - Export current category/functor to standard formats
+   - Import validation with clear error messages
+   - Support for mathematical notation in exported files
 
-   Yes, via .csv upload in a documented format.
+4. **Edit History**: Step-by-step undo beyond transactions
+   - Maintain edit history within transaction scope
+   - Undo/redo buttons in GUI for granular control
+   - Clear visual indication of undo stack state
 
-3. **Import/Export**: Should there be GUI options to import/export category definitions?
+5. **Advanced Interface**: Code view for power users
+   - JSON/text editor for direct entity manipulation
+   - Syntax highlighting and validation
+   - Switch between form view and code view
 
-   Yes, similar to above.
+6. **Keyboard Navigation**: Essential shortcuts implemented
+   - Ctrl+N: Add object, Ctrl+M: Add morphism, Del: Delete selected
+   - Ctrl+Z/Y: Undo/redo, Ctrl+S: Commit transaction
+   - Tab navigation and form field shortcuts
 
-4. **Undo/Redo**: Beyond transaction rollback, should there be step-by-step undo functionality?
+7. **Platform Support**: Desktop-focused design
+   - Optimized for desktop browser use (Chrome primary)
+   - Mobile/tablet support deferred to future versions
+   - Wide layout assumes adequate screen real estate
 
-   Yes.
-
-5. **Advanced Editing**: Should there be a "code view" for advanced users to edit entities via text/JSON?
-
-   Yes.
-
-6. **Keyboard Shortcuts**: What keyboard shortcuts would improve workflow efficiency?
-
-   Add object, add morphism, delete selected, any others you think appropriate based on common design patterns.
-
-7. **Mobile Support**: Should the layout be responsive for tablet/mobile use?
-
-  Tablet and mobile support are out of scope for this prototype.
-
-8. **Theme Support**: Should the app support light/dark themes or custom styling?
-
-   It should offer a light theme and a dark one, but custom themes are out of scope for this prototype.
+8. **Visual Themes**: Dual theme support
+   - Light and dark theme options in settings
+   - Theme preference saved in session state
+   - Custom themes beyond light/dark not implemented

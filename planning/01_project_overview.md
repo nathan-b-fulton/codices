@@ -58,28 +58,29 @@ A prototype of a Streamlit-based application for creating, editing, and visualiz
    - User can preview changes before committing
    - Rollback capability for cancelled edits
 
-## Questions for Clarification
+## Design Decisions Made
 
-1. **Data Persistence**: Should the app support multiple graph databases or focus on a single persistent database?
+1. **Data Persistence**: Single persistent database focused approach
+   - Simplifies architecture and deployment
+   - Sufficient for prototype scope and single-user use
 
-   For this prototype, a single persistent database is sufficient.
+2. **User Management**: Single-user application
+   - Reduces complexity around session management and data isolation
+   - Allows focus on core mathematical functionality
 
-2. **User Management**: Is this a single-user application or should it support multiple users/sessions?
+3. **Import/Export**: Future enhancement priority
+   - CSV upload/download for bulk operations will be supported
+   - Standard mathematical format support deferred to later versions
 
-   For this prototype, a single-user application is sufficient.
+4. **Mathematical Validation**: Permissive mode for prototype
+   - Focus on structural correctness over strict mathematical law enforcement
+   - Tool functionality prioritized over mathematical rigor initially
 
-3. **Import/Export**: Should the app support importing/exporting category definitions to/from standard formats?
+5. **Performance Scale**: Small to medium scale focus
+   - Categories: < 100
+   - Objects/Morphisms: < 10,000 each
+   - Optimization for larger scales deferred to future iterations
 
-   This would be a useful extension, but is not required for the prototype.
-
-4. **Validation**: What level of mathematical validation should be enforced (e.g., composition laws, functor laws)?
-
-   This is outside the scope of the prototype, but definitely worth exploring in the future.
-
-5. **Performance**: What is the expected scale (number of categories, objects, morphisms)?
-
-   The scale will be relatively small for the first few rounds of development, with categories probably limited to < 100, objects and morphisms < 10000 each. We will refactor to handle larger scale if needed.
-
-6. **Extensibility**: Should the system support custom properties or attributes on entities?
-
-No, we don't want to be declaring more tables as part of populating the data. The currently defined fields should suffice.
+6. **Entity Extensibility**: Fixed schema approach
+   - Current defined fields sufficient for mathematical modeling
+   - Avoids dynamic schema complexity
