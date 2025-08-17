@@ -192,16 +192,32 @@ def prepare_pyvis_network(visualization_data, mode, layout):
 
 1. **Mathematical Accuracy**: How strictly should visualizations follow category theory conventions (e.g., commutative diagram layout)?
 
+   Use commutative diagram layout.
+
 2. **Scalability**: What's the maximum number of entities we should support in a single visualization?
+
+   Constrain a single visulation to 100 entities. Support scrolling for viewing larger structure in 100 entity chunks.
 
 3. **Animation**: Should there be animated transitions when switching between visualization modes?
 
+   Yes.
+
 4. **3D Visualization**: Would 3D visualization be helpful for complex functors or natural transformations?
+
+   Yes.
 
 5. **Collaborative Features**: Should visualizations support annotations or collaborative editing?
 
+   Not for this prototype, but we should consider this as a useful extension for future versions.
+
 6. **Accessibility**: What accessibility features are needed for the visualizations?
+
+   Please support alternate color schemes for color blindness.
 
 7. **Mathematical Notation**: Should the visualizations include LaTeX rendering for mathematical symbols?
 
+   Yes.
+
 8. **Performance Benchmarks**: What response time is acceptable for visualization generation?
+
+   10 seconds or less is ideal.

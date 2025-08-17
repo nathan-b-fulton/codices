@@ -1,7 +1,7 @@
-# Project Overview: Codices - Mathematical Category Theory App
+# Project Overview: Codices - Mathematical Category Theory App Prototype
 
 ## Project Description
-A Streamlit-based application for creating, editing, and visualizing mathematical categories using Kuzu graph database as the backend. The app supports category theory concepts including categories, objects, morphisms, functors, and natural transformations.
+A prototype of a Streamlit-based application for creating, editing, and visualizing mathematical categories using Kuzu graph database as the backend. The app supports category theory concepts including categories, objects, morphisms, functors, and natural transformations.
 
 ## High-Level Architecture
 
@@ -62,12 +62,24 @@ A Streamlit-based application for creating, editing, and visualizing mathematica
 
 1. **Data Persistence**: Should the app support multiple graph databases or focus on a single persistent database?
 
+   For this prototype, a single persistent database is sufficient.
+
 2. **User Management**: Is this a single-user application or should it support multiple users/sessions?
+
+   For this prototype, a single-user application is sufficient.
 
 3. **Import/Export**: Should the app support importing/exporting category definitions to/from standard formats?
 
+   This would be a useful extension, but is not required for the prototype.
+
 4. **Validation**: What level of mathematical validation should be enforced (e.g., composition laws, functor laws)?
+
+   This is outside the scope of the prototype, but definitely worth exploring in the future.
 
 5. **Performance**: What is the expected scale (number of categories, objects, morphisms)?
 
+   The scale will be relatively small for the first few rounds of development, with categories probably limited to < 100, objects and morphisms < 10000 each. We will refactor to handle larger scale if needed.
+
 6. **Extensibility**: Should the system support custom properties or attributes on entities?
+
+No, we don't want to be declaring more tables as part of populating the data. The currently defined fields should suffice.

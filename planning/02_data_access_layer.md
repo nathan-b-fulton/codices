@@ -78,8 +78,8 @@ class CategorySession:
 rel_tables = {
     'morphism_source': {'from': 'Morphism', 'to': 'Object', 'uniqueness': 'MANY_ONE'},
     'morphism_target': {'from': 'Morphism', 'to': 'Object', 'uniqueness': 'MANY_ONE'},
-    'morphism_composition_source': {'from': 'Morphism', 'to': 'Morphism', 'uniqueness': 'MANY_ONE'},
-    'morphism_composition_target': {'from': 'Morphism', 'to': 'Morphism', 'uniqueness': 'MANY_ONE'},
+    'functor_morphism_component_source': {'from': 'Morphism', 'to': 'Morphism', 'uniqueness': 'MANY_ONE'},
+    'functor_morphism_component_target': {'from': 'Morphism', 'to': 'Morphism', 'uniqueness': 'MANY_ONE'},
     'functor_source': {'from': 'Functor', 'to': 'Category', 'uniqueness': 'MANY_ONE'},
     'functor_target': {'from': 'Functor', 'to': 'Category', 'uniqueness': 'MANY_ONE'},
     'nat_trans_source': {'from': 'Natural_Transformation', 'to': 'Functor', 'uniqueness': 'MANY_ONE'},
@@ -111,12 +111,24 @@ rel_tables = {
 
 1. **Composition Storage**: How should morphism composition be stored? As explicit relationships or computed on-demand?
 
+   Computed on-demand, but using Streamlit's caching decorators to avoid repeat computation.
+
 2. **Identity Morphisms**: Should identity morphisms be automatically created and managed, or user-defined?
+
+   Automatically created.
 
 3. **Functor Mappings**: How detailed should functor object/morphism mappings be stored?
 
+   Every component of a functor mapping should be explicitly stored, with the same source and target pattern as is used for morphisms.
+
 4. **Validation Level**: Should the DAL enforce mathematical laws (associativity, identity) or just structural constraints?
+
+   Yes, the DAL should enforce mathematical laws.
 
 5. **Performance**: Should we implement caching for frequently accessed category structures?
 
+   Yes.
+
 6. **Backup/Versioning**: Should the DAL support versioning or backup functionality for the graph database?
+
+  Support backups on-demand.

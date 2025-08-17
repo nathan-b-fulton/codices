@@ -287,16 +287,32 @@ class Config:
 
 1. **Database Location**: Should the database be embedded or support remote connections?
 
+   Embedded is sufficient for this prototype, but we should assume that future versions may support remote connections, and follow best practices for those connections to be robust and recover gracefully from failure.
+
 2. **Caching Strategy**: What level of caching is appropriate for different operations?
+
+   Use caching with all read operations to avoid querying the database in the same way repeatedly. Support both automatic resets of caches when write operations are committed, and a manual cache reset through an advanced options menu.
 
 3. **Error Recovery**: How should the application handle database corruption or connection failures?
 
+   Create a repair interface to be shown in cases where invalid data is detected. For the prototype, it is sufficient to rely on manual repair of invalid data, and kuzu's transaction support for connection failures.
+
 4. **Logging Level**: What level of logging is appropriate for debugging vs production use?
+
+   Support a production use level of logging limited to `warning` and `error` messages, along with summary logs when commits are made to the database. Also support toggling a debugging level in the advanced options menu, which adds much more verbose logging. Document the location of log files in the user documentation.
 
 5. **Configuration Management**: Should configuration be file-based, environment variables, or GUI settings?
 
+   Configuration should have GUI support, but also be persisted in a `toml` format file. Both should be documented in user documentation.
+
 6. **Backup Strategy**: Should the application include automatic backup functionality?
+
+   Automated backup functionality is a useful future extension, but out of scope for the prototype.
 
 7. **Plugin Architecture**: Should the system be designed to support future extensions or plugins?
 
+   A plugin architecture is not necessary at this time. Extensibility will eventually be provided by allowing meta-categories that add new data structures and operations, but this is outside the scope of the prototype.
+
 8. **API Design**: Should we design the DAL to support future REST API exposure?
+
+   Eventually the backend should be accessible in a REST API, so we should design to leave that possibility open, though it is not a requirement for the prototype.

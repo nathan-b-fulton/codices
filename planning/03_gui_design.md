@@ -227,16 +227,32 @@ st.session_state.form_mode = None  # "create", "edit", None
 
 1. **Auto-save vs Manual Save**: Should form changes be auto-saved or require explicit save action?
 
+   Only manual save (commit to kuzu) is required for this prototype.
+
 2. **Bulk Operations**: Should the GUI support bulk creation/editing of objects and morphisms?
+
+   Yes, via .csv upload in a documented format.
 
 3. **Import/Export**: Should there be GUI options to import/export category definitions?
 
+   Yes, similar to above.
+
 4. **Undo/Redo**: Beyond transaction rollback, should there be step-by-step undo functionality?
+
+   Yes.
 
 5. **Advanced Editing**: Should there be a "code view" for advanced users to edit entities via text/JSON?
 
+   Yes.
+
 6. **Keyboard Shortcuts**: What keyboard shortcuts would improve workflow efficiency?
+
+   Add object, add morphism, delete selected, any others you think appropriate based on common design patterns.
 
 7. **Mobile Support**: Should the layout be responsive for tablet/mobile use?
 
+  Tablet and mobile support are out of scope for this prototype.
+
 8. **Theme Support**: Should the app support light/dark themes or custom styling?
+
+   It should offer a light theme and a dark one, but custom themes are out of scope for this prototype.

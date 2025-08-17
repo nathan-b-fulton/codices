@@ -12,7 +12,7 @@
 
 **Impact**: Affects complexity of validation code, user experience, and target audience
 
-**Recommendation Needed**: Define target user expertise level
+**Recommendation**: Only support Permissive Mode for prototype
 
 ### 2. Functor Mapping Granularity
 **Question**: How detailed should functor object/morphism mappings be?
@@ -24,6 +24,8 @@
 
 **Impact**: Database size, query performance, user interface complexity
 
+**Recommendation**: Only support Full Explicit for prototype. In future iterations, the goal will be Hybrid.
+
 ### 3. Composition Handling
 **Question**: How should morphism composition be managed?
 
@@ -34,6 +36,8 @@
 
 **Impact**: Database schema, query performance, mathematical accuracy
 
+**Recommendation**: Support Hybrid composition handling
+
 ### 4. Identity Morphism Management
 **Question**: Should identity morphisms be automatically managed?
 
@@ -43,6 +47,8 @@
 - **Optional**: User can choose automatic or manual mode
 
 **Impact**: Database consistency, user workflow, validation complexity
+
+**Recommendation**: Automatic
 
 ## User Experience Questions
 
@@ -56,6 +62,8 @@
 
 **Impact**: User workflow, error recovery, database performance
 
+**Recommendation**: Batch-based
+
 ### 6. Visualization Complexity
 **Question**: How much detail should visualizations show by default?
 
@@ -66,6 +74,8 @@
 
 **Impact**: Visual clarity, performance, user learning curve
 
+**Recommendation**: User-Configurable
+
 ### 7. Error Handling Strategy
 **Question**: How should mathematical constraint violations be handled?
 
@@ -75,6 +85,8 @@
 - **Mixed**: Prevent obvious errors, warn about complex violations
 
 **Impact**: User experience, code complexity, mathematical accuracy
+
+**Recommendation**: Implement Preventative for the prototype; we will test and revise if this is not a good user experience.
 
 ## Technical Architecture Questions
 
@@ -88,6 +100,8 @@
 
 **Impact**: Deployment complexity, data preservation, maintenance overhead
 
+**Recommendation**: Implement Manual for prototype, iterate as needed.
+
 ### 9. Visualization Performance
 **Question**: How should large graphs be handled in visualization?
 
@@ -99,6 +113,8 @@
 
 **Impact**: User experience with large datasets, rendering performance
 
+**Recommendation**: Implement Pagination for the prototype; we will test and revise if this is not a good user experience.
+
 ### 10. Plugin Architecture
 **Question**: Should the system support extensibility?
 
@@ -108,6 +124,8 @@
 - **Full Plugin System**: Extensible entity types and operations
 
 **Impact**: Code complexity, maintainability, future flexibility
+
+**Recommendation**: Implement No Plugins for prototype, iterate as needed.
 
 ## Implementation Priority Questions
 
@@ -139,6 +157,8 @@
 
 **Impact**: Development time, code quality, maintenance burden
 
+**Recommendation**: Implement Comprehensive for prototype, iterate as needed.
+
 ## User Workflow Questions
 
 ### 13. Guided vs Free-Form Creation
@@ -151,6 +171,8 @@
 
 **Impact**: User experience, code complexity, target audience
 
+**Recommendation**: Implement Form-Based for prototype, iterate as needed.
+
 ### 14. Visualization Integration
 **Question**: How tightly should visualization be integrated with editing?
 
@@ -161,6 +183,8 @@
 
 **Impact**: Implementation complexity, user preference accommodation
 
+**Recommendation**: Implement Separate Views for prototype, iterate as needed.
+
 ## Questions Requiring User Input
 
 ### 15. Target Users
@@ -168,15 +192,21 @@
 - **Students**: Need guided learning and validation
 - **Software Developers**: Need practical tools and performance
 
+**Recommendation**: Focus on Students for prototype, iterate as needed.
+
 ### 16. Use Cases
 - **Teaching Tool**: Focus on clarity and educational features
 - **Research Tool**: Focus on mathematical accuracy and advanced features
 - **Practical Tool**: Focus on performance and workflow efficiency
 
+**Recommendation**: Focus on Teaching Tool for prototype, iterate as needed.
+
 ### 17. Integration Requirements
 - **Standalone Application**: Self-contained tool
 - **Jupyter Integration**: Work well in notebook environments
 - **Web Deployment**: Support deployment to web servers
+
+**Recommendation**: Focus on Standalone Application for prototype, iterate as needed.
 
 ## Decision Framework
 

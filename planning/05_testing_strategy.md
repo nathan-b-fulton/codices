@@ -298,16 +298,32 @@ pytest tests/test_gui.py
 
 1. **Test Data Complexity**: How mathematically complex should our test categories be?
 
+   They do not need to be complex. Classic examples are suitable.
+
 2. **Visual Testing**: Should we implement automated visual regression testing for PyVis outputs?
+
+   Yes.
 
 3. **Property-Based Testing**: Should we use `hypothesis` for property-based testing of mathematical laws?
 
+   Yes.
+
 4. **Integration Testing**: How thoroughly should we test Streamlit-PyVis integration?
+
+   Only basic testing for successful rendering and reasonable responsiveness are needed.
 
 5. **User Acceptance Testing**: Should we create specific scenarios for mathematical researchers to validate?
 
+   No.
+
 6. **Performance Baselines**: What are realistic performance expectations for different graph sizes?
+
+   We don't know yet, but the use cases for the prototype involve comparatively small graphs (< 1000 nodes, < 10000 edges), and performance will probably not be an immediate concern.
 
 7. **Cross-Platform Testing**: Should tests verify behavior across different operating systems?
 
+   The prototype is being developed in Windows, and cross-platform testing is out of scope for now.
+
 8. **Browser Compatibility**: Should visualization testing cover multiple browsers?
+
+   It is sufficient to only cover Google Chrome for the prototype.
