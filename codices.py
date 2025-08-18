@@ -46,6 +46,15 @@ def init_session_state():
     
     if 'editing_entity' not in st.session_state:
         st.session_state.editing_entity = None
+    
+    if 'transaction_changes' not in st.session_state:
+        st.session_state.transaction_changes = []
+    
+    if 'preview_mode' not in st.session_state:
+        st.session_state.preview_mode = False
+    
+    if 'transaction_history' not in st.session_state:
+        st.session_state.transaction_history = []
 
 
 def render_sidebar():
@@ -150,12 +159,60 @@ def render_entity_actions(entity_type):
 
 
 def render_session_management():
-    """Render transaction control buttons."""
+    """Render enhanced transaction control buttons with change tracking."""
     dal = get_dal()
     
-    # Transaction status
+    # Transaction mode selector
+    st.sidebar.subheader("Transaction Mode")
+    transaction_mode = st.sidebar.radio(
+        "Mode:",
+        ["Auto-save", "Manual Transaction"],
+        index=1 if st.session_state.in_transaction else 0,
+        help="Auto-save: Changes saved immediately. Manual: Use transactions for batch operations."
+    )
+    
+    # Auto-start transaction if switched to manual mode
+    if transaction_mode == "Manual Transaction" and not st.session_state.in_transaction:
+        try:
+            dal.begin_transaction()
+            st.session_state.in_transaction = True
+            st.session_state.transaction_changes = []
+            add_transaction_change("Switched to manual transaction mode")
+            st.rerun()
+        except Exception as e:
+            st.sidebar.error(f"Failed to start transaction: {e}")
+    
+    # Auto-commit if switched to auto-save mode
+    elif transaction_mode == "Auto-save" and st.session_state.in_transaction:
+        try:
+            dal.commit_transaction()
+            st.session_state.in_transaction = False
+            st.session_state.transaction_changes = []
+            st.session_state.preview_mode = False
+            st.sidebar.success("Auto-committed pending changes")
+            st.rerun()
+        except Exception as e:
+            st.sidebar.error(f"Failed to auto-commit: {e}")
+    
+    # Transaction status with change count
     if st.session_state.in_transaction:
-        st.sidebar.success("🔄 Transaction Active")
+        change_count = len(st.session_state.transaction_changes)
+        st.sidebar.success(f"🔄 Transaction Active ({change_count} changes)")
+        
+        # Show preview toggle
+        st.session_state.preview_mode = st.sidebar.checkbox(
+            "Preview Mode", 
+            value=st.session_state.preview_mode,
+            help="Preview changes before committing"
+        )
+        
+        # Show change summary if in preview mode
+        if st.session_state.preview_mode and st.session_state.transaction_changes:
+            with st.sidebar.expander("📋 Recent Changes", expanded=False):
+                for i, change in enumerate(st.session_state.transaction_changes[-3:], 1):  # Show last 3 changes
+                    st.sidebar.write(f"{i}. {change}")
+                if len(st.session_state.transaction_changes) > 3:
+                    st.sidebar.write(f"... and {len(st.session_state.transaction_changes) - 3} more")
     else:
         st.sidebar.info("💾 Auto-save Mode")
     
@@ -166,7 +223,9 @@ def render_session_management():
             try:
                 dal.begin_transaction()
                 st.session_state.in_transaction = True
+                st.session_state.transaction_changes = []
                 st.sidebar.success("Transaction started")
+                add_transaction_change("Started new transaction")
                 st.rerun()
             except Exception as e:
                 st.sidebar.error(f"Failed to start transaction: {e}")
@@ -174,22 +233,138 @@ def render_session_management():
     with col2:
         if st.button("Commit", disabled=not st.session_state.in_transaction):
             try:
+                if st.session_state.preview_mode and st.session_state.transaction_changes:
+                    # Show commit confirmation in preview mode
+                    st.sidebar.warning("⚠️ Confirm commit with preview below")
+                    return
+                
                 dal.commit_transaction()
+                change_count = len(st.session_state.transaction_changes)
+                
+                # Add to history
+                if st.session_state.transaction_changes:
+                    st.session_state.transaction_history.append({
+                        'changes': st.session_state.transaction_changes.copy(),
+                        'count': change_count,
+                        'timestamp': 'Now'  # Could use datetime for real timestamps
+                    })
+                
                 st.session_state.in_transaction = False
-                st.sidebar.success("Changes committed")
+                st.session_state.transaction_changes = []
+                st.session_state.preview_mode = False
+                st.sidebar.success(f"✅ {change_count} changes committed")
                 st.rerun()
             except Exception as e:
                 st.sidebar.error(f"Failed to commit: {e}")
     
     if st.session_state.in_transaction:
-        if st.sidebar.button("Rollback", type="secondary"):
-            try:
-                dal.rollback_transaction()
-                st.session_state.in_transaction = False
-                st.sidebar.success("Changes rolled back")
-                st.rerun()
-            except Exception as e:
-                st.sidebar.error(f"Failed to rollback: {e}")
+        col3, col4 = st.sidebar.columns(2)
+        
+        with col3:
+            if st.button("Rollback", type="secondary"):
+                try:
+                    dal.rollback_transaction()
+                    change_count = len(st.session_state.transaction_changes)
+                    st.session_state.in_transaction = False
+                    st.session_state.transaction_changes = []
+                    st.session_state.preview_mode = False
+                    st.sidebar.success(f"↩️ {change_count} changes rolled back")
+                    st.rerun()
+                except Exception as e:
+                    st.sidebar.error(f"Failed to rollback: {e}")
+        
+        with col4:
+            if st.session_state.preview_mode and st.session_state.transaction_changes:
+                if st.button("Confirm Commit", type="primary", key="confirm_commit"):
+                    try:
+                        dal.commit_transaction()
+                        change_count = len(st.session_state.transaction_changes)
+                        
+                        # Add to history
+                        if st.session_state.transaction_changes:
+                            st.session_state.transaction_history.append({
+                                'changes': st.session_state.transaction_changes.copy(),
+                                'count': change_count,
+                                'timestamp': 'Now'
+                            })
+                        
+                        st.session_state.in_transaction = False
+                        st.session_state.transaction_changes = []
+                        st.session_state.preview_mode = False
+                        st.sidebar.success(f"✅ {change_count} changes committed")
+                        st.rerun()
+                    except Exception as e:
+                        st.sidebar.error(f"Failed to commit: {e}")
+
+
+def add_transaction_change(description: str):
+    """Add a change description to the transaction log."""
+    if 'transaction_changes' not in st.session_state:
+        st.session_state.transaction_changes = []
+    
+    st.session_state.transaction_changes.append(description)
+    
+    # Auto-suggest transaction mode for complex operations
+    if (not st.session_state.in_transaction and 
+        len(st.session_state.get('recent_changes', [])) > 2):
+        st.info("💡 Consider using Manual Transaction mode for complex operations")
+
+
+def suggest_transaction_usage():
+    """Show transaction usage suggestions based on current context."""
+    if st.session_state.selected_entity_type == "Category" and st.session_state.selected_entity_id is not None:
+        dal = get_dal()
+        try:
+            objects = dal.get_objects_in_category(st.session_state.selected_entity_id)
+            morphisms = dal.get_morphisms_in_category(st.session_state.selected_entity_id)
+            
+            if len(objects) > 5 or len(morphisms) > 10:
+                if not st.session_state.in_transaction:
+                    st.info("💡 Tip: Use Manual Transaction mode when working with large categories")
+        except Exception:
+            pass
+
+
+def render_preview_panel():
+    """Render the transaction preview panel."""
+    st.subheader("🔍 Transaction Preview")
+    
+    if not st.session_state.transaction_changes:
+        st.info("No changes in current transaction")
+        return
+    
+    st.write(f"**{len(st.session_state.transaction_changes)} changes pending:**")
+    
+    # Show all changes in an organized way
+    for i, change in enumerate(st.session_state.transaction_changes, 1):
+        if change.startswith("Created"):
+            st.write(f"✅ {i}. {change}")
+        elif change.startswith("Updated"):
+            st.write(f"✏️ {i}. {change}")
+        elif change.startswith("Deleted"):
+            st.write(f"❌ {i}. {change}")
+        else:
+            st.write(f"📝 {i}. {change}")
+    
+    # Transaction summary
+    creates = sum(1 for c in st.session_state.transaction_changes if c.startswith("Created"))
+    updates = sum(1 for c in st.session_state.transaction_changes if c.startswith("Updated"))
+    deletes = sum(1 for c in st.session_state.transaction_changes if c.startswith("Deleted"))
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Created", creates)
+    with col2:
+        st.metric("Updated", updates)
+    with col3:
+        st.metric("Deleted", deletes)
+    
+    # Warning if significant changes
+    if deletes > 0:
+        st.warning("⚠️ This transaction includes deletions. These cannot be undone after commit.")
+    
+    if len(st.session_state.transaction_changes) > 10:
+        st.info("💡 Large transaction detected. Consider committing in smaller batches.")
 
 
 def render_main_content():
@@ -219,6 +394,11 @@ def render_main_content():
     elif st.session_state.form_mode in ["delete_object", "delete_morphism"]:
         render_entity_delete_confirmation()
         return
+    
+    # Show preview panel if in preview mode
+    if st.session_state.get('preview_mode', False) and st.session_state.get('in_transaction', False):
+        render_preview_panel()
+        st.divider()
     
     # Main tabs
     tab1, tab2, tab3 = st.tabs(["📋 Components", "🌐 Visualization", "📚 Documentation"])
@@ -303,6 +483,7 @@ def render_delete_confirmation():
                     if entity_type == "Category":
                         dal.delete_category(entity_id)
                     st.success(f"{entity_type} deleted successfully")
+                    add_transaction_change(f"Deleted {entity_type.lower()} '{entity['name']}'")
                     st.session_state.selected_entity_id = None
                     st.session_state.form_mode = None
                     st.rerun()
@@ -365,10 +546,12 @@ def render_category_form(edit_mode=False):
                 if edit_mode:
                     dal.update_category(st.session_state.editing_entity, name=name, description=description)
                     st.success("Category updated successfully")
+                    add_transaction_change(f"Updated category '{name}'")
                 else:
                     category_id = dal.create_category(name, description)
                     st.success(f"Category '{name}' created with ID {category_id}")
                     st.session_state.selected_entity_id = category_id
+                    add_transaction_change(f"Created category '{name}' (ID: {category_id})")
                 
                 st.session_state.form_mode = None
                 st.rerun()
@@ -439,6 +622,7 @@ def render_functor_form(edit_mode=False):
                         functor_id = dal.create_functor(name, source_cat_id, target_cat_id, description)
                         st.success(f"Functor '{name}' created with ID {functor_id}")
                         st.session_state.selected_entity_id = functor_id
+                        add_transaction_change(f"Created functor '{name}' (ID: {functor_id})")
                     
                     st.session_state.form_mode = None
                     st.rerun()
@@ -539,9 +723,11 @@ def render_object_form(edit_mode=False):
                     if edit_mode:
                         dal.update_object(st.session_state.editing_entity, name=name, description=description)
                         st.success("Object updated successfully")
+                        add_transaction_change(f"Updated object '{name}'")
                     else:
                         object_id = dal.create_object(name, category_id, description)
                         st.success(f"Object '{name}' created with ID {object_id}")
+                        add_transaction_change(f"Created object '{name}' (ID: {object_id})")
                     
                     st.session_state.form_mode = None
                     st.rerun()
@@ -649,6 +835,7 @@ def render_morphism_form(edit_mode=False):
                     else:
                         morphism_id = dal.create_morphism(name, source_id, target_id, category_id, description)
                         st.success(f"Morphism '{name}' created with ID {morphism_id}")
+                        add_transaction_change(f"Created morphism '{name}' (ID: {morphism_id})")
                         st.session_state.form_mode = None
                         st.rerun()
                     
@@ -700,8 +887,10 @@ def render_entity_delete_confirmation():
                     if form_mode == "delete_object":
                         dal.delete_object(entity_id)
                         st.success("Object deleted successfully")
+                        add_transaction_change(f"Deleted object '{entity['name']}'")
                     elif form_mode == "delete_morphism":
                         st.info("Morphism deletion functionality coming soon")
+                        add_transaction_change(f"Attempted to delete morphism '{entity['name']}'")
                     
                     st.session_state.form_mode = None
                     st.rerun()
@@ -751,6 +940,9 @@ def render_category_components(dal, category_id):
         st.header(f"Category: {category['name']}")
         if category['description']:
             st.write(category['description'])
+        
+        # Show transaction usage suggestion
+        suggest_transaction_usage()
         
         # Objects section
         st.subheader("Objects")
@@ -901,6 +1093,21 @@ def render_documentation_tab():
     """Render the documentation tab."""
     st.header("📚 Documentation")
     
+    # Sub-tabs for documentation sections
+    doc_tab1, doc_tab2, doc_tab3 = st.tabs(["📖 Mathematical Reference", "📝 Transaction History", "🚀 Getting Started"])
+    
+    with doc_tab1:
+        render_mathematical_reference()
+    
+    with doc_tab2:
+        render_transaction_history()
+    
+    with doc_tab3:
+        render_getting_started_guide()
+
+
+def render_mathematical_reference():
+    """Render mathematical reference documentation."""
     entity_type = st.session_state.selected_entity_type
     
     if entity_type == "Category":
@@ -941,6 +1148,79 @@ def render_documentation_tab():
         #### Mathematical Laws
         - **Naturality**: G(f) ∘ α_X = α_Y ∘ F(f) for all f: X → Y
         """)
+
+
+def render_transaction_history():
+    """Render transaction history."""
+    st.subheader("Transaction History")
+    
+    if not st.session_state.transaction_history:
+        st.info("No completed transactions yet")
+        return
+    
+    # Show recent transactions
+    st.write(f"**{len(st.session_state.transaction_history)} completed transactions:**")
+    
+    for i, transaction in enumerate(reversed(st.session_state.transaction_history), 1):
+        with st.expander(f"Transaction {len(st.session_state.transaction_history) - i + 1}: {transaction['count']} changes"):
+            for change in transaction['changes']:
+                if change.startswith("Created"):
+                    st.write(f"✅ {change}")
+                elif change.startswith("Updated"):
+                    st.write(f"✏️ {change}")
+                elif change.startswith("Deleted"):
+                    st.write(f"❌ {change}")
+                else:
+                    st.write(f"📝 {change}")
+    
+    # Clear history button
+    if st.button("Clear History", key="clear_transaction_history"):
+        st.session_state.transaction_history = []
+        st.success("Transaction history cleared")
+        st.rerun()
+
+
+def render_getting_started_guide():
+    """Render getting started guide."""
+    st.subheader("Getting Started with Codices")
+    
+    st.markdown("""
+    ### Quick Start Guide
+    
+    1. **Create a Category**
+       - Select "Category" in the sidebar
+       - Click "Create New"
+       - Enter a name and description
+       - Save the category
+    
+    2. **Add Objects**
+       - Select your category
+       - Go to "Components" tab
+       - Click "Add Object"
+       - Enter object details
+    
+    3. **Create Morphisms**
+       - Ensure you have at least 2 objects
+       - Click "Add Morphism"
+       - Select source and target objects
+       - Save the morphism
+    
+    4. **Visualize**
+       - Go to "Visualization" tab
+       - Choose visualization mode
+       - Explore your category structure
+    
+    5. **Transaction Management**
+       - Use "Auto-save" for immediate changes
+       - Use "Manual Transaction" for batch operations
+       - Enable "Preview Mode" to review changes before commit
+    
+    ### Tips
+    - 💡 Use transactions for complex operations
+    - 🔍 Enable preview mode to see all changes before committing
+    - 📊 Check the visualization tab to understand your structures
+    - 📝 Use descriptive names for better organization
+    """)
 
 
 def main():

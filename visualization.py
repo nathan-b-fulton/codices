@@ -28,7 +28,7 @@ EDGE_STYLES = {
 
 
 @st.cache_data
-def get_visualization_data(dal: CategoryDAL, entity_type: str, entity_id: Optional[int] = None, mode: str = 'standard') -> Dict[str, Any]:
+def get_visualization_data(_dal: CategoryDAL, entity_type: str, entity_id: Optional[int] = None, mode: str = 'standard') -> Dict[str, Any]:
     """
     Query database and return data structure for visualization.
     
@@ -43,13 +43,13 @@ def get_visualization_data(dal: CategoryDAL, entity_type: str, entity_id: Option
     """
     try:
         if entity_type == "Category" and entity_id is not None:
-            return get_category_visualization_data(dal, entity_id, mode)
+            return get_category_visualization_data(_dal, entity_id, mode)
         elif entity_type == "Functor":
-            return get_functor_visualization_data(dal, mode)
+            return get_functor_visualization_data(_dal, mode)
         elif entity_type == "Natural Transformation":
-            return get_natural_transformation_visualization_data(dal, mode)
+            return get_natural_transformation_visualization_data(_dal, mode)
         else:
-            return get_complete_graph_data(dal, mode)
+            return get_complete_graph_data(_dal, mode)
             
     except Exception as e:
         logger.error(f"Failed to get visualization data: {e}")
