@@ -557,7 +557,11 @@ def render_category_form(edit_mode=False):
                 st.rerun()
                 
             except Exception as e:
-                st.error(f"Failed to save category: {e}")
+                if "already exists" in str(e):
+                    st.error(f"❌ Name conflict: {e}")
+                    st.info("💡 Try using a different name or check the entity list in the sidebar")
+                else:
+                    st.error(f"Failed to save category: {e}")
 
 
 def render_functor_form(edit_mode=False):
@@ -733,7 +737,11 @@ def render_object_form(edit_mode=False):
                     st.rerun()
                     
                 except Exception as e:
-                    st.error(f"Failed to save object: {e}")
+                    if "already exists" in str(e):
+                        st.error(f"❌ Name conflict: {e}")
+                        st.info("💡 Try using a different name within this category")
+                    else:
+                        st.error(f"Failed to save object: {e}")
                     
     except Exception as e:
         st.error(f"Error loading category: {e}")
@@ -840,7 +848,11 @@ def render_morphism_form(edit_mode=False):
                         st.rerun()
                     
                 except Exception as e:
-                    st.error(f"Failed to save morphism: {e}")
+                    if "already exists" in str(e):
+                        st.error(f"❌ Name conflict: {e}")
+                        st.info("💡 Try using a different name for this morphism")
+                    else:
+                        st.error(f"Failed to save morphism: {e}")
                     
     except Exception as e:
         st.error(f"Error loading category data: {e}")

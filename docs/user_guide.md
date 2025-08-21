@@ -221,6 +221,11 @@ For categories with many objects/morphisms:
 
 ### Common Issues
 
+**"Category 'X' already exists"**
+- Names must be unique within their scope
+- Choose a different name or edit the existing entity
+- Check the entity list in the sidebar for existing names
+
 **"No data to visualize"**
 - Create some objects and morphisms in your category
 - Check that you've selected the correct entity in the sidebar
@@ -234,6 +239,14 @@ For categories with many objects/morphisms:
 - Check browser console for JavaScript errors
 - Try refreshing the page
 - Ensure all required dependencies are installed
+
+### Name Uniqueness Rules
+
+**Categories**: Must have globally unique names
+**Objects**: Must have unique names within their category (can repeat across categories)
+**Morphisms**: Must have unique names within their category (can repeat across categories)
+**Functors**: Names can repeat (distinguished by source/target categories)
+**Natural Transformations**: Names can repeat (distinguished by source/target functors)
 
 ### Getting Help
 

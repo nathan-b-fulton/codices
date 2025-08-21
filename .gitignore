@@ -1,6 +1,8 @@
 # Created by venv; see https://docs.python.org/3/library/venv.html
 
 include/
+etc/
+share/
 Lib/
 Scripts/
 pyenv.cfg

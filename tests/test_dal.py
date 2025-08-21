@@ -15,7 +15,7 @@ class TestCategoryOperations:
         """Test retrieving a category by ID."""
         category = dal.get_category(sample_category)
         assert category is not None
-        assert category["name"] == "TestCategory"
+        assert category["name"].startswith("TestCategory_")
         assert category["description"] == "A test category for unit tests"
         assert "ID" in category
     
@@ -28,7 +28,7 @@ class TestCategoryOperations:
         """Test listing all categories."""
         categories = dal.list_categories()
         assert len(categories) >= 1
-        assert any(cat["name"] == "TestCategory" for cat in categories)
+        assert any(cat["name"].startswith("TestCategory_") for cat in categories)
     
     def test_update_category(self, dal, sample_category):
         """Test updating category properties."""
@@ -61,7 +61,7 @@ class TestObjectOperations:
         """Test retrieving objects in a category."""
         objects = dal.get_objects_in_category(sample_category)
         assert len(objects) >= 1
-        assert any(obj["name"] == "TestObject" for obj in objects)
+        assert any(obj["name"].startswith("TestObject_") for obj in objects)
     
     def test_update_object(self, dal, sample_object):
         """Test updating object properties."""

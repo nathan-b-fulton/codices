@@ -100,6 +100,12 @@ class CategoryDAL:
             ID of the created category
         """
         try:
+            # Check if category with this name already exists
+            existing_categories = self.list_categories()
+            for cat in existing_categories:
+                if cat['name'] == name:
+                    raise ValueError(f"Category '{name}' already exists with ID {cat['ID']}")
+            
             result = self.conn.execute(
                 "CREATE (c:Category {name: $name, description: $description}) RETURN c.ID",
                 {"name": name, "description": description}
@@ -178,6 +184,12 @@ class CategoryDAL:
         """
         try:
             if name is not None:
+                # Check if another category with this name already exists
+                existing_categories = self.list_categories()
+                for cat in existing_categories:
+                    if cat['name'] == name and cat['ID'] != category_id:
+                        raise ValueError(f"Category '{name}' already exists with ID {cat['ID']}")
+                
                 self.conn.execute(
                     "MATCH (c:Category) WHERE c.ID = $id SET c.name = $name",
                     {"id": category_id, "name": str(name)}
@@ -242,6 +254,12 @@ class CategoryDAL:
             ID of the created object
         """
         try:
+            # Check if object with this name already exists in the category
+            existing_objects = self.get_objects_in_category(category_id)
+            for obj in existing_objects:
+                if obj['name'] == name:
+                    raise ValueError(f"Object '{name}' already exists in category {category_id} with ID {obj['ID']}")
+            
             # Create the object
             result = self.conn.execute(
                 "CREATE (o:Object {name: $name, description: $description}) RETURN o.ID",
@@ -394,6 +412,12 @@ class CategoryDAL:
             ID of the created morphism
         """
         try:
+            # Check if morphism with this name already exists in the category
+            existing_morphisms = self.get_morphisms_in_category(category_id)
+            for morph in existing_morphisms:
+                if morph['name'] == name:
+                    raise ValueError(f"Morphism '{name}' already exists in category {category_id} with ID {morph['ID']}")
+            
             # Create the morphism
             result = self.conn.execute(
                 "CREATE (m:Morphism {name: $name, description: $description, is_identity: false}) RETURN m.ID",
@@ -437,10 +461,9 @@ class CategoryDAL:
         """
         try:
             result = self.conn.execute(
-                """MATCH (c:Category)-[:category_morphisms]->(m:Morphism)
+                """MATCH (c:Category)-[:category_morphisms]->(m:Morphism) WHERE c.ID = $id
                    OPTIONAL MATCH (m)-[:morphism_source]->(s:Object)
                    OPTIONAL MATCH (m)-[:morphism_target]->(t:Object)
-                   WHERE c.ID = $id 
                    RETURN m.ID, m.name, m.description, m.is_identity, s.name, t.name ORDER BY m.name""",
                 {"id": category_id}
             )

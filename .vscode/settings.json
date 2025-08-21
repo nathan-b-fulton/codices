@@ -1,10 +1,12 @@
 {
     "cSpell.words": [
+        "conftest",
         "docstrings",
         "functors",
         "kuzu",
         "morphism",
         "morphisms",
+        "mypy",
         "pyenv",
         "pytest",
         "pyvis",
