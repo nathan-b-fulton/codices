@@ -350,53 +350,123 @@ def create_pyvis_network(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]
             directed=config.get('directed', True)
         )
         
-        # Configure physics
-        net.set_options("""
-        {
-          "physics": {
-            "enabled": true,
-            "stabilization": {"iterations": 100},
-            "barnesHut": {
-              "gravitationalConstant": -8000,
-              "centralGravity": 0.3,
-              "springLength": 95,
-              "springConstant": 0.04,
-              "damping": 0.09
+        # Configure physics based on layout
+        layout_type = config.get('layout', 'force_directed')
+        
+        if layout_type == 'hierarchical':
+            physics_config = {
+                "physics": {
+                    "enabled": False
+                },
+                "layout": {
+                    "hierarchical": {
+                        "enabled": True,
+                        "direction": "UD",
+                        "sortMethod": "directed"
+                    }
+                }
             }
-          },
-          "interaction": {
-            "hover": true,
-            "selectConnectedEdges": true
-          },
-          "layout": {
-            "improvedLayout": true
-          }
-        }
-        """)
+        elif layout_type == 'circular':
+            physics_config = {
+                "physics": {
+                    "enabled": False
+                },
+                "layout": {
+                    "randomSeed": 42
+                }
+            }
+        elif layout_type == 'manual':
+            physics_config = {
+                "physics": {
+                    "enabled": False
+                },
+                "interaction": {
+                    "dragNodes": True,
+                    "dragView": True,
+                    "zoomView": True
+                }
+            }
+        else:  # force_directed
+            # Use physics_strength parameter to adjust force
+            strength = config.get('physics_strength', 0.5)
+            physics_config = {
+                "physics": {
+                    "enabled": True,
+                    "stabilization": {"iterations": 100},
+                    "barnesHut": {
+                        "gravitationalConstant": -2000 * strength,  # Adjustable based on slider
+                        "centralGravity": 0.1 * strength,           # Adjustable
+                        "springLength": 120,                        # Keep constant
+                        "springConstant": 0.02 * strength,          # Adjustable  
+                        "damping": 0.15 + (0.1 * (1 - strength))    # More damping = easier dragging
+                    }
+                }
+            }
         
-        # Add nodes
-        for node in nodes:
-            net.add_node(
-                node['id'],
-                label=node['label'],
-                title=node.get('title', ''),
-                color=node.get('color', '#97C2FC'),
-                shape=node.get('shape', 'circle'),
-                size=node.get('size', 20)
-            )
+        # Common interaction settings (unless overridden by manual layout)
+        if "interaction" not in physics_config:
+            physics_config["interaction"] = {
+                "hover": True,
+                "selectConnectedEdges": True,
+                "dragNodes": True,
+                "dragView": True,
+                "zoomView": True,
+                "multiselect": True,
+                "tooltipDelay": 200
+            }
         
-        # Add edges
+        # Apply the configuration
+        import json
+        net.set_options(json.dumps(physics_config))
+        
+        # Add nodes with layout-specific positioning
+        import math
+        
+        for i, node in enumerate(nodes):
+            # Use default node size
+            display_size = node.get('size', 20)
+            
+            node_config = {
+                'label': node['label'],
+                'title': node.get('title', ''),
+                'color': node.get('color', '#97C2FC'),
+                'shape': node.get('shape', 'circle'),
+                'size': display_size
+            }
+            
+            # Add position for circular layout
+            if layout_type == 'circular' and len(nodes) > 1:
+                angle = 2 * math.pi * i / len(nodes)
+                # Adjust radius based on number of nodes for better spacing
+                radius = max(150, 50 + (len(nodes) * 15))
+                x = radius * math.cos(angle)
+                y = radius * math.sin(angle)
+                node_config['x'] = x
+                node_config['y'] = y
+                node_config['physics'] = False  # Fix position for circular layout
+            elif layout_type == 'manual':
+                # For manual layout, let PyVis use default positioning but disable physics
+                node_config['physics'] = False
+            
+            net.add_node(node['id'], **node_config)
+        
+        # Add edges with conditional labels
+        show_labels = config.get('show_labels', True)
+        
         for edge in edges:
-            net.add_edge(
-                edge['from'],
-                edge['to'],
-                label=edge.get('label', ''),
-                title=edge.get('title', ''),
-                color=edge.get('color', '#2B7CE9'),
-                width=edge.get('width', 1),
-                arrows=edge.get('arrows', 'to'),
-                dashes=edge.get('dashes', False)
-            )
+            edge_config = {
+                'title': edge.get('title', ''),
+                'color': edge.get('color', '#2B7CE9'),
+                'width': edge.get('width', 1),
+                'arrows': edge.get('arrows', 'to'),
+                'dashes': edge.get('dashes', False)
+            }
+            
+            # Only add label if show_labels is enabled
+            if show_labels and edge.get('label'):
+                edge_config['label'] = edge['label']
+            
+            net.add_edge(edge['from'], edge['to'], **edge_config)
         
         return net
         
@@ -418,7 +488,55 @@ def render_visualization(dal: CategoryDAL, entity_type: str, entity_id: Optional
         # Visualization controls
         st.subheader("Visualization Controls")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
+        
+        # Help toggles section
+        help_col1, help_col2 = st.columns(2)
+        
+        # Add layout information with toggle
+        if 'show_layout_help' not in st.session_state:
+            st.session_state.show_layout_help = False
+        
+        with help_col1:
+            if st.button("ℹ️ Layout Help" if not st.session_state.show_layout_help else "❌ Close Help", 
+                         key="toggle_layout_help"):
+                st.session_state.show_layout_help = not st.session_state.show_layout_help
+                st.rerun()
+        
+        # Add zoom info toggle
+        if 'show_zoom_info' not in st.session_state:
+            st.session_state.show_zoom_info = False
+        
+        with help_col2:
+            if st.button("🔍 Zoom Info" if not st.session_state.show_zoom_info else "❌ Close Zoom", 
+                         key="toggle_zoom_info"):
+                st.session_state.show_zoom_info = not st.session_state.show_zoom_info
+                st.rerun()
+        
+        if st.session_state.show_layout_help:
+            st.info("""
+            **Layout Options:**
+            - **Force-directed**: Spring physics simulation (adjustable strength)
+            - **Hierarchical**: Tree-like structure for directed graphs
+            - **Circular**: Nodes arranged in a circle
+            - **Manual**: No physics - drag nodes freely
+            """)
+            st.info("""
+            **Interaction Tips:**
+            - Drag nodes to reposition (works best with lower physics strength)
+            - Scroll to zoom in/out
+            - Click and drag background to pan
+            - Hover over nodes/edges for details
+            """)
+        
+        if st.session_state.show_zoom_info:
+            st.info("""
+            **Zoom & Navigation:**
+            - **Mouse wheel**: Zoom in/out
+            - **Click + drag background**: Pan view
+            - **Click + drag nodes**: Reposition (in force-directed/manual modes)
+            - **Double-click**: Focus on node
+            """)
         
         with col1:
             mode = st.selectbox(
@@ -430,12 +548,25 @@ def render_visualization(dal: CategoryDAL, entity_type: str, entity_id: Optional
         with col2:
             layout = st.selectbox(
                 "Layout",
-                ['force_directed', 'hierarchical', 'circular'],
-                help="Graph layout algorithm"
+                ['force_directed', 'hierarchical', 'circular', 'manual'],
+                help="Force: Spring physics, Hierarchical: Tree structure, Circular: Even distribution, Manual: Free positioning"
             )
         
         with col3:
             show_labels = st.checkbox("Show Edge Labels", value=True)
+        
+        with col4:
+            if layout == 'force_directed':
+                physics_strength = st.slider(
+                    "Physics Strength", 
+                    min_value=0.1, 
+                    max_value=2.0, 
+                    value=0.5, 
+                    step=0.1,
+                    help="Lower = easier to drag nodes"
+                )
+            else:
+                physics_strength = 0.5  # Default value
         
         # Configuration
         config = {
@@ -445,7 +576,8 @@ def render_visualization(dal: CategoryDAL, entity_type: str, entity_id: Optional
             'font_color': '#000000',
             'directed': True,
             'layout': layout,
-            'show_labels': show_labels
+            'show_labels': show_labels,
+            'physics_strength': physics_strength
         }
         
         # Get visualization data
@@ -488,18 +620,25 @@ def render_visualization(dal: CategoryDAL, entity_type: str, entity_id: Optional
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("Download HTML", key="export_html"):
-                with open(tmp_file.name, 'r', encoding='utf-8') as f:
-                    st.download_button(
-                        label="Download Visualization",
-                        data=f.read(),
-                        file_name=f"visualization_{entity_type.lower()}.html",
-                        mime="text/html"
-                    )
+            # Direct download button
+            with open(tmp_file.name, 'r', encoding='utf-8') as f:
+                st.download_button(
+                    label="📄 Download HTML",
+                    data=f.read(),
+                    file_name=f"codices_visualization_{entity_type.lower()}_{layout}.html",
+                    mime="text/html",
+                    help="Download interactive HTML visualization"
+                )
         
         with col2:
-            if st.button("Save as PNG", key="export_png"):
-                st.info("PNG export functionality coming soon")
+            if st.button("📊 Export Info", key="export_info"):
+                st.info("""
+                **Export Options:**
+                - **HTML**: Interactive visualization (recommended)
+                - **PNG**: Static image (use browser screenshot for now)
+                - **SVG**: Vector graphics (future feature)
+                - **Data**: JSON export of graph data (future feature)
+                """)
         
         # Cleanup
         Path(tmp_file.name).unlink(missing_ok=True)

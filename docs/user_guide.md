@@ -140,9 +140,15 @@ When enabled, Preview Mode shows:
 
 ### Visualization Controls
 
-- **Layout**: Choose force-directed, hierarchical, or circular layouts
-- **Labels**: Toggle edge labels on/off
-- **Zoom/Pan**: Use mouse to navigate large graphs
+- **Layout**: Choose between multiple layout algorithms:
+  - **Force-directed**: Physics simulation with adjustable strength
+  - **Hierarchical**: Tree structure for directed relationships  
+  - **Circular**: Nodes arranged in a circle with even spacing
+  - **Manual**: No physics - drag nodes freely to any position
+- **Physics Strength**: Slider to control force-directed physics (lower = easier dragging)
+- **Labels**: Toggle edge labels on/off for cleaner display
+- **Zoom/Pan**: Use mouse scroll and drag to navigate large graphs
+- **Advanced Options**: Reset layout, fit to screen, center graph
 - **Export**: Download visualizations as HTML files
 
 ### Reading Visualizations
@@ -180,7 +186,25 @@ For categories with many objects/morphisms:
 1. Use Manual Transaction mode for efficiency
 2. Enable Preview Mode to review large changes
 3. Consider breaking complex operations into smaller transactions
-4. Use the visualization filters to focus on specific parts
+4. Use appropriate visualization layouts:
+   - **Hierarchical**: Best for tree-like structures
+   - **Circular**: Good for symmetric relationships
+   - **Manual**: For custom arrangements
+   - **Force-directed**: With low physics strength for easier manipulation
+
+### Visualization Best Practices
+
+**Layout Selection:**
+- Use **Force-directed** with low physics strength for interactive exploration
+- Use **Hierarchical** for categories with clear directional flow
+- Use **Circular** for symmetric or cyclic structures
+- Use **Manual** when you need precise positioning
+
+**Interaction Tips:**
+- **Lower physics strength** (0.1-0.3) for easier node dragging
+- **Disable edge labels** for cleaner view of complex graphs
+- **Use zoom** to focus on specific parts of large structures
+- **Reset layout** if nodes get too scattered
 
 ### Export and Import
 

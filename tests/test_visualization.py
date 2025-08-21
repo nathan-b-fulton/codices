@@ -115,3 +115,85 @@ class TestVisualization:
         assert 'edges' in viz_data
         assert len(viz_data['nodes']) == 0
         assert len(viz_data['edges']) == 0
+    
+    def test_layout_configurations(self, dal, setup_test_data):
+        """Test different layout configurations."""
+        test_data = setup_test_data
+        viz_data = get_visualization_data(dal, "Category", test_data['category_id'], "standard")
+        
+        layouts = ['force_directed', 'hierarchical', 'circular', 'manual']
+        
+        for layout in layouts:
+            config = {
+                'height': '400px',
+                'width': '100%',
+                'directed': True,
+                'layout': layout,
+                'show_labels': True,
+                'physics_strength': 0.3
+            }
+            
+            net = create_pyvis_network(viz_data['nodes'], viz_data['edges'], config)
+            
+            # Verify network was created
+            assert net is not None
+            assert len(net.nodes) == len(viz_data['nodes'])
+            assert len(net.edges) == len(viz_data['edges'])
+    
+    def test_physics_strength_adjustment(self, dal, setup_test_data):
+        """Test physics strength adjustment for force-directed layout."""
+        test_data = setup_test_data
+        viz_data = get_visualization_data(dal, "Category", test_data['category_id'], "standard")
+        
+        # Test different physics strengths
+        strengths = [0.1, 0.5, 1.0, 2.0]
+        
+        for strength in strengths:
+            config = {
+                'layout': 'force_directed',
+                'physics_strength': strength
+            }
+            
+            net = create_pyvis_network(viz_data['nodes'], viz_data['edges'], config)
+            
+            # Should create successfully with any strength value
+            assert net is not None
+    
+    def test_edge_label_toggle(self, dal, setup_test_data):
+        """Test edge label show/hide functionality."""
+        test_data = setup_test_data
+        viz_data = get_visualization_data(dal, "Category", test_data['category_id'], "standard")
+        
+        # Test with labels enabled
+        config_with_labels = {
+            'layout': 'force_directed',
+            'show_labels': True
+        }
+        net_with_labels = create_pyvis_network(viz_data['nodes'], viz_data['edges'], config_with_labels)
+        
+        # Test with labels disabled
+        config_without_labels = {
+            'layout': 'force_directed', 
+            'show_labels': False
+        }
+        net_without_labels = create_pyvis_network(viz_data['nodes'], viz_data['edges'], config_without_labels)
+        
+        # Both should create successfully
+        assert net_with_labels is not None
+        assert net_without_labels is not None
+    
+    def test_basic_network_creation(self, dal, setup_test_data):
+        """Test basic network creation functionality."""
+        test_data = setup_test_data
+        viz_data = get_visualization_data(dal, "Category", test_data['category_id'], "standard")
+        
+        # Test network creation
+        config = {
+            'layout': 'force_directed'
+        }
+        net = create_pyvis_network(viz_data['nodes'], viz_data['edges'], config)
+        
+        # Network should create successfully
+        assert net is not None
+        assert len(net.nodes) > 0
+        assert len(net.edges) >= 0
