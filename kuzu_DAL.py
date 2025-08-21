@@ -230,7 +230,7 @@ class CategoryDAL:
             
             # Delete the category itself
             self.conn.execute(
-                "MATCH (c:Category) WHERE c.ID = $id DELETE c",
+                "MATCH (c:Category) WHERE c.ID = $id DETACH DELETE c",
                 {"id": category_id}
             )
             
