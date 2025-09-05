@@ -41,6 +41,15 @@ def initialize_schema(db_path: str = "./kuzu_db") -> None:
         conn.execute("CREATE REL TABLE IF NOT EXISTS category_objects(FROM Category TO Object)")
         conn.execute("CREATE REL TABLE IF NOT EXISTS category_morphisms(FROM Category TO Morphism)")
         
+        # Functor mapping relationships (explicit storage)
+        conn.execute("CREATE REL TABLE IF NOT EXISTS functor_object_map(FROM Object TO Object, via_functor_id INT)")
+        conn.execute("CREATE REL TABLE IF NOT EXISTS functor_morphism_map(FROM Morphism TO Morphism, via_functor_id INT)")
+        
+        # Natural transformation relationships
+        conn.execute("CREATE REL TABLE IF NOT EXISTS nat_trans_source(FROM Natural_Transformation TO Functor)")
+        conn.execute("CREATE REL TABLE IF NOT EXISTS nat_trans_target(FROM Natural_Transformation TO Functor)")
+        conn.execute("CREATE REL TABLE IF NOT EXISTS nat_trans_components(FROM Natural_Transformation TO Morphism, at_object_id INT)")
+        
         logger.info("Database schema initialized successfully")
         
     except Exception as e:
@@ -535,7 +544,7 @@ class CategoryDAL:
                 """MATCH (f:Functor)
                    OPTIONAL MATCH (f)-[:functor_source]->(sc:Category)
                    OPTIONAL MATCH (f)-[:functor_target]->(tc:Category)
-                   RETURN f.ID, f.name, f.description, sc.name, tc.name ORDER BY f.name"""
+                   RETURN f.ID, f.name, f.description, sc.name, tc.name, sc.ID, tc.ID ORDER BY f.name"""
             )
             query_result = _get_query_result(result)
             functors = []
@@ -546,7 +555,9 @@ class CategoryDAL:
                     "name": str(row[1]),  # type: ignore
                     "description": str(row[2]),  # type: ignore
                     "source_category": str(row[3]) if row[3] is not None else None,  # type: ignore
-                    "target_category": str(row[4]) if row[4] is not None else None  # type: ignore
+                    "target_category": str(row[4]) if row[4] is not None else None,  # type: ignore
+                    "source_category_id": int(row[5]) if row[5] is not None else None,  # type: ignore
+                    "target_category_id": int(row[6]) if row[6] is not None else None  # type: ignore
                 })
             return functors
         except Exception as e:
@@ -575,6 +586,16 @@ class CategoryDAL:
             row = query_result.get_next()  # type: ignore
             nt_id = int(row[0])  # type: ignore
             
+            # Link to source and target functors
+            self.conn.execute(
+                "MATCH (nt:Natural_Transformation), (f:Functor) WHERE nt.ID = $nt_id AND f.ID = $src_id CREATE (nt)-[:nat_trans_source]->(f)",
+                {"nt_id": nt_id, "src_id": source_functor_id}
+            )
+            self.conn.execute(
+                "MATCH (nt:Natural_Transformation), (f:Functor) WHERE nt.ID = $nt_id AND f.ID = $tgt_id CREATE (nt)-[:nat_trans_target]->(f)",
+                {"nt_id": nt_id, "tgt_id": target_functor_id}
+            )
+            
             logger.info(f"Created natural transformation '{name}' with ID {nt_id}")
             return nt_id
         except Exception as e:
@@ -586,12 +607,15 @@ class CategoryDAL:
         List all natural transformations.
         
         Returns:
-            List of natural transformation dictionaries
+            List of natural transformation dictionaries including linked functors when available
         """
         try:
             result = self.conn.execute(
                 """MATCH (nt:Natural_Transformation)
-                   RETURN nt.ID, nt.name, nt.description ORDER BY nt.name"""
+                   OPTIONAL MATCH (nt)-[:nat_trans_source]->(sf:Functor)
+                   OPTIONAL MATCH (nt)-[:nat_trans_target]->(tf:Functor)
+                   RETURN nt.ID, nt.name, nt.description, sf.ID, sf.name, tf.ID, tf.name
+                   ORDER BY nt.name"""
             )
             query_result = _get_query_result(result)
             nat_trans = []
@@ -600,13 +624,416 @@ class CategoryDAL:
                 nat_trans.append({
                     "ID": int(row[0]),  # type: ignore
                     "name": str(row[1]),  # type: ignore
-                    "description": str(row[2])  # type: ignore
+                    "description": str(row[2]),  # type: ignore
+                    "source_functor_id": int(row[3]) if row[3] is not None else None,  # type: ignore
+                    "source_functor": str(row[4]) if row[4] is not None else None,  # type: ignore
+                    "target_functor_id": int(row[5]) if row[5] is not None else None,  # type: ignore
+                    "target_functor": str(row[6]) if row[6] is not None else None  # type: ignore
                 })
             return nat_trans
         except Exception as e:
             logger.error(f"Failed to list natural transformations: {e}")
             raise
     
+    def add_functor_object_mapping(self, functor_id: int, source_obj_id: int, target_obj_id: int) -> bool:
+        """Add object mapping ensuring objects belong to functor's domain/codomain."""
+        try:
+            self.conn.execute(
+                """
+                MATCH (f:Functor) WHERE f.ID = $fid
+                OPTIONAL MATCH (f)-[:functor_source]->(sc:Category)
+                OPTIONAL MATCH (f)-[:functor_target]->(tc:Category)
+                MATCH (s:Object) WHERE s.ID = $sid
+                MATCH (t:Object) WHERE t.ID = $tid
+                WITH f, sc, tc, s, t
+                MATCH (sc)-[:category_objects]->(s)
+                MATCH (tc)-[:category_objects]->(t)
+                CREATE (s)-[:functor_object_map {via_functor_id: $fid}]->(t)
+                """,
+                {"fid": functor_id, "sid": source_obj_id, "tid": target_obj_id}
+            )
+            logger.info(f"Added functor object mapping F#{functor_id}: {source_obj_id} -> {target_obj_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add functor object mapping: {e}")
+            raise
+
+    def remove_functor_object_mapping(self, functor_id: int, source_obj_id: int) -> bool:
+        """Remove object mapping for a given source object under a functor."""
+        try:
+            self.conn.execute(
+                """
+                MATCH (s:Object)-[r:functor_object_map]->(:Object)
+                WHERE r.via_functor_id = $fid AND s.ID = $sid
+                DELETE r
+                """,
+                {"fid": functor_id, "sid": source_obj_id}
+            )
+            logger.info(f"Removed functor object mapping F#{functor_id}: {source_obj_id} -> *")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to remove functor object mapping: {e}")
+            raise
+
+    def get_functor_object_mappings(self, functor_id: int) -> List[Dict[str, Any]]:
+        """List object mappings for a functor with names/IDs."""
+        try:
+            result = self.conn.execute(
+                """
+                MATCH (s:Object)-[r:functor_object_map]->(t:Object)
+                WHERE r.via_functor_id = $fid
+                RETURN s.ID, s.name, t.ID, t.name
+                ORDER BY s.name
+                """,
+                {"fid": functor_id}
+            )
+            qr = _get_query_result(result)
+            mappings: List[Dict[str, Any]] = []
+            while qr.has_next():  # type: ignore
+                row = qr.get_next()  # type: ignore
+                mappings.append({
+                    "source_object_id": int(row[0]),
+                    "source_object": str(row[1]),
+                    "target_object_id": int(row[2]),
+                    "target_object": str(row[3]),
+                })
+            return mappings
+        except Exception as e:
+            logger.error(f"Failed to list functor object mappings: {e}")
+            raise
+
+    def add_functor_morphism_mapping(self, functor_id: int, source_morph_id: int, target_morph_id: int) -> bool:
+        """Add morphism mapping ensuring morphisms belong to functor's domain/codomain."""
+        try:
+            self.conn.execute(
+                """
+                MATCH (f:Functor) WHERE f.ID = $fid
+                OPTIONAL MATCH (f)-[:functor_source]->(sc:Category)
+                OPTIONAL MATCH (f)-[:functor_target]->(tc:Category)
+                MATCH (sm:Morphism) WHERE sm.ID = $smid
+                MATCH (tm:Morphism) WHERE tm.ID = $tmid
+                WITH f, sc, tc, sm, tm
+                MATCH (sc)-[:category_morphisms]->(sm)
+                MATCH (tc)-[:category_morphisms]->(tm)
+                CREATE (sm)-[:functor_morphism_map {via_functor_id: $fid}]->(tm)
+                """,
+                {"fid": functor_id, "smid": source_morph_id, "tmid": target_morph_id}
+            )
+            logger.info(f"Added functor morphism mapping F#{functor_id}: {source_morph_id} -> {target_morph_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add functor morphism mapping: {e}")
+            raise
+
+    def remove_functor_morphism_mapping(self, functor_id: int, source_morph_id: int) -> bool:
+        """Remove morphism mapping for a given source morphism under a functor."""
+        try:
+            self.conn.execute(
+                """
+                MATCH (sm:Morphism)-[r:functor_morphism_map]->(:Morphism)
+                WHERE r.via_functor_id = $fid AND sm.ID = $smid
+                DELETE r
+                """,
+                {"fid": functor_id, "smid": source_morph_id}
+            )
+            logger.info(f"Removed functor morphism mapping F#{functor_id}: {source_morph_id} -> *")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to remove functor morphism mapping: {e}")
+            raise
+
+    def get_functor_morphism_mappings(self, functor_id: int) -> List[Dict[str, Any]]:
+        """List morphism mappings for a functor with names/IDs."""
+        try:
+            result = self.conn.execute(
+                """
+                MATCH (sm:Morphism)-[r:functor_morphism_map]->(tm:Morphism)
+                WHERE r.via_functor_id = $fid
+                OPTIONAL MATCH (sm)-[:morphism_source]->(ss:Object)
+                OPTIONAL MATCH (sm)-[:morphism_target]->(st:Object)
+                OPTIONAL MATCH (tm)-[:morphism_source]->(ts:Object)
+                OPTIONAL MATCH (tm)-[:morphism_target]->(tt:Object)
+                RETURN sm.ID, sm.name, ss.name, st.name, tm.ID, tm.name, ts.name, tt.name
+                ORDER BY sm.name
+                """,
+                {"fid": functor_id}
+            )
+            qr = _get_query_result(result)
+            mappings: List[Dict[str, Any]] = []
+            while qr.has_next():  # type: ignore
+                row = qr.get_next()  # type: ignore
+                mappings.append({
+                    "source_morphism_id": int(row[0]),
+                    "source_morphism": str(row[1]),
+                    "source_from": str(row[2]) if row[2] is not None else None,
+                    "source_to": str(row[3]) if row[3] is not None else None,
+                    "target_morphism_id": int(row[4]),
+                    "target_morphism": str(row[5]),
+                    "target_from": str(row[6]) if row[6] is not None else None,
+                    "target_to": str(row[7]) if row[7] is not None else None,
+                })
+            return mappings
+        except Exception as e:
+            logger.error(f"Failed to list functor morphism mappings: {e}")
+            raise
+
+    def add_nt_component(self, nt_id: int, at_object_id: int, component_morphism_id: int) -> bool:
+        """
+        Add a component morphism α_X for natural transformation at object X.
+        Enforces that X is in the source category of the linked functors and the morphism is in the target category.
+        """
+        try:
+            # Create component relationship only if typing holds
+            self.conn.execute(
+                """
+                MATCH (nt:Natural_Transformation)-[:nat_trans_source]->(:Functor)-[:functor_source]->(srcCat:Category),
+                      (nt)-[:nat_trans_target]->(:Functor)-[:functor_target]->(tgtCat:Category),
+                      (x:Object), (m:Morphism)
+                WHERE nt.ID = $nt_id AND x.ID = $x_id AND m.ID = $m_id
+                  AND (srcCat)-[:category_objects]->(x)
+                  AND (tgtCat)-[:category_morphisms]->(m)
+                CREATE (nt)-[:nat_trans_components {at_object_id: $x_id}]->(m)
+                """,
+                {"nt_id": nt_id, "x_id": at_object_id, "m_id": component_morphism_id}
+            )
+            logger.info(f"Added NT component for nt={nt_id} at X={at_object_id} using morphism={component_morphism_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add natural transformation component: {e}")
+            raise
+
+    def remove_nt_component(self, nt_id: int, at_object_id: int) -> bool:
+        """Remove component morphism for a specific object X."""
+        try:
+            self.conn.execute(
+                """
+                MATCH (nt:Natural_Transformation)-[r:nat_trans_components]->(:Morphism)
+                WHERE nt.ID = $nt_id AND r.at_object_id = $x_id
+                DELETE r
+                """,
+                {"nt_id": nt_id, "x_id": at_object_id}
+            )
+            logger.info(f"Removed NT component for nt={nt_id} at X={at_object_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to remove natural transformation component: {e}")
+            raise
+
+    def get_nt_components(self, nt_id: int) -> List[Dict[str, Any]]:
+        """List components α_X for a natural transformation with basic labels."""
+        try:
+            result = self.conn.execute(
+                """
+                MATCH (nt:Natural_Transformation)-[r:nat_trans_components]->(m:Morphism)
+                OPTIONAL MATCH (m)-[:morphism_source]->(s:Object)
+                OPTIONAL MATCH (m)-[:morphism_target]->(t:Object)
+                WHERE nt.ID = $nt_id
+                RETURN r.at_object_id, m.ID, m.name, s.ID, s.name, t.ID, t.name
+                ORDER BY r.at_object_id
+                """,
+                {"nt_id": nt_id}
+            )
+            query_result = _get_query_result(result)
+            components: List[Dict[str, Any]] = []
+            while query_result.has_next():  # type: ignore
+                row = query_result.get_next()  # type: ignore
+                components.append({
+                    "at_object_id": int(row[0]) if row[0] is not None else None,  # type: ignore
+                    "morphism_id": int(row[1]),  # type: ignore
+                    "morphism_name": str(row[2]),  # type: ignore
+                    "source_object_id": int(row[3]) if row[3] is not None else None,  # type: ignore
+                    "source_object": str(row[4]) if row[4] is not None else None,  # type: ignore
+                    "target_object_id": int(row[5]) if row[5] is not None else None,  # type: ignore
+                    "target_object": str(row[6]) if row[6] is not None else None,  # type: ignore
+                })
+            return components
+        except Exception as e:
+            logger.error(f"Failed to list NT components for nt={nt_id}: {e}")
+            raise
+
+    def validate_nt_structure(self, nt_id: int) -> List[str]:
+        """Validate that components are well-typed relative to linked functors' domain/codomain."""
+        errors: List[str] = []
+        try:
+            # Retrieve linked functors and categories
+            result = self.conn.execute(
+                """
+                MATCH (nt:Natural_Transformation)
+                OPTIONAL MATCH (nt)-[:nat_trans_source]->(sf:Functor)-[:functor_source]->(srcCat:Category)
+                OPTIONAL MATCH (nt)-[:nat_trans_target]->(tf:Functor)-[:functor_target]->(tgtCat:Category)
+                WHERE nt.ID = $nt_id
+                RETURN srcCat.ID, tgtCat.ID
+                """,
+                {"nt_id": nt_id}
+            )
+            qr = _get_query_result(result)
+            if not qr.has_next():  # type: ignore
+                return ["Natural transformation not found"]
+            row = qr.get_next()  # type: ignore
+            src_cat_id = int(row[0]) if row[0] is not None else None
+            tgt_cat_id = int(row[1]) if row[1] is not None else None
+            if src_cat_id is None or tgt_cat_id is None:
+                errors.append("Natural transformation must be linked to source and target functors with categories")
+                return errors
+
+            # Check every component typing with categories
+            result2 = self.conn.execute(
+                """
+                MATCH (nt:Natural_Transformation)-[r:nat_trans_components]->(m:Morphism)
+                WHERE nt.ID = $nt_id
+                OPTIONAL MATCH (srcCat:Category)-[:category_objects]->(x:Object)
+                WHERE srcCat.ID = $src_cat AND x.ID = r.at_object_id
+                OPTIONAL MATCH (tgtCat:Category)-[:category_morphisms]->(m)
+                WHERE tgtCat.ID = $tgt_cat
+                RETURN r.at_object_id IS NULL AS badX, m.ID IS NULL AS badM, r.at_object_id
+                """,
+                {"nt_id": nt_id, "src_cat": src_cat_id, "tgt_cat": tgt_cat_id}
+            )
+            qr2 = _get_query_result(result2)
+            while qr2.has_next():  # type: ignore
+                r = qr2.get_next()  # type: ignore
+                bad_x = bool(r[0])
+                bad_m = bool(r[1])
+                x_id = r[2]
+                if bad_x:
+                    errors.append(f"Component at object ID {x_id} is not in the source category")
+                if bad_m:
+                    errors.append(f"Component morphism for object ID {x_id} is not in the target category")
+            return errors
+        except Exception as e:
+            logger.error(f"Failed to validate natural transformation {nt_id}: {e}")
+            return [f"Validation failed: {e}"]
+
+    def validate_naturality(self, nt_id: int) -> List[str]:
+        """
+        Best-effort naturality check for α: F ⇒ G.
+        For each component α_X and each morphism f: X→Y in the source category C where α_Y and
+        mappings F(f), G(f) exist, verify the square is well-typed:
+        G(f) ∘ α_X and α_Y ∘ F(f) are both F(X) → G(Y). Equality is not provable in this schema;
+        we report shape compatibility and missing data.
+        """
+        messages: List[str] = []
+        try:
+            # Get linked functors and their categories
+            res = self.conn.execute(
+                """
+                MATCH (nt:Natural_Transformation)
+                OPTIONAL MATCH (nt)-[:nat_trans_source]->(F:Functor)-[:functor_source]->(C:Category)
+                OPTIONAL MATCH (nt)-[:nat_trans_source]->(F)-[:functor_target]->(D1:Category)
+                OPTIONAL MATCH (nt)-[:nat_trans_target]->(G:Functor)-[:functor_target]->(D2:Category)
+                WHERE nt.ID = $nt_id
+                RETURN F.ID, G.ID, C.ID, D1.ID, D2.ID
+                """,
+                {"nt_id": nt_id}
+            )
+            qr = _get_query_result(res)
+            if not qr.has_next():  # type: ignore
+                return ["Natural transformation not found"]
+            row = qr.get_next()  # type: ignore
+            F_id = row[0]
+            G_id = row[1]
+            C_id = row[2]
+            D1_id = row[3]
+            D2_id = row[4]
+            if F_id is None or G_id is None or C_id is None or D1_id is None or D2_id is None:
+                return ["Missing linked functors or categories; cannot check naturality"]
+            if int(D1_id) != int(D2_id):
+                return ["Functor codomains differ; naturality undefined"]
+            D_id = int(D1_id)
+            F_id = int(F_id)
+            G_id = int(G_id)
+            C_id = int(C_id)
+
+            # Build maps of α components by object ID
+            comps = self.get_nt_components(nt_id)
+            alpha_by_X = {c["at_object_id"]: c for c in comps if c.get("at_object_id") is not None}
+
+            # Iterate morphisms f: X->Y in C
+            res2 = self.conn.execute(
+                """
+                MATCH (c:Category)-[:category_morphisms]->(f:Morphism)
+                WHERE c.ID = $cid
+                OPTIONAL MATCH (f)-[:morphism_source]->(x:Object)
+                OPTIONAL MATCH (f)-[:morphism_target]->(y:Object)
+                RETURN f.ID, f.name, x.ID, x.name, y.ID, y.name
+                """,
+                {"cid": C_id}
+            )
+            qr2 = _get_query_result(res2)
+            while qr2.has_next():  # type: ignore
+                r = qr2.get_next()  # type: ignore
+                f_id = int(r[0])
+                f_name = str(r[1])
+                X_id = r[2]
+                X_name = r[3]
+                Y_id = r[4]
+                Y_name = r[5]
+                if X_id is None or Y_id is None:
+                    continue
+                X_id = int(X_id)
+                Y_id = int(Y_id)
+
+                # Need α_X and α_Y
+                aX = alpha_by_X.get(X_id)
+                aY = alpha_by_X.get(Y_id)
+                if aX is None or aY is None:
+                    messages.append(f"Skipping f={f_name}: missing α_X or α_Y")
+                    continue
+
+                # Retrieve F(f) and G(f)
+                resF = self.conn.execute(
+                    """
+                    MATCH (sm:Morphism)-[r:functor_morphism_map]->(tm:Morphism)
+                    WHERE r.via_functor_id = $fid AND sm.ID = $smid
+                    OPTIONAL MATCH (tm)-[:morphism_source]->(tms:Object)
+                    OPTIONAL MATCH (tm)-[:morphism_target]->(tmt:Object)
+                    RETURN tm.ID, tm.name, tms.name, tmt.name
+                    """,
+                    {"fid": F_id, "smid": f_id}
+                )
+                resG = self.conn.execute(
+                    """
+                    MATCH (sm:Morphism)-[r:functor_morphism_map]->(tm:Morphism)
+                    WHERE r.via_functor_id = $gid AND sm.ID = $smid
+                    OPTIONAL MATCH (tm)-[:morphism_source]->(tms:Object)
+                    OPTIONAL MATCH (tm)-[:morphism_target]->(tmt:Object)
+                    RETURN tm.ID, tm.name, tms.name, tmt.name
+                    """,
+                    {"gid": G_id, "smid": f_id}
+                )
+                qF = _get_query_result(resF)
+                qG = _get_query_result(resG)
+                if not qF.has_next() or not qG.has_next():  # type: ignore
+                    messages.append(f"Skipping f={f_name}: missing F(f) or G(f) mapping")
+                    continue
+                Ff = qF.get_next()  # type: ignore
+                Gf = qG.get_next()  # type: ignore
+                Ff_src, Ff_tgt = Ff[2], Ff[3]
+                Gf_src, Gf_tgt = Gf[2], Gf[3]
+
+                # We can only check shape compatibility of the square
+                # α_X: F(X) -> G(X)
+                # α_Y: F(Y) -> G(Y)
+                # G(f): G(X) -> G(Y)
+                # F(f): F(X) -> F(Y)
+                # For shape, need labels for α_X and α_Y
+                aX_src = aX.get("source_object")
+                aX_tgt = aX.get("target_object")
+                aY_src = aY.get("source_object")
+                aY_tgt = aY.get("target_object")
+                shape_ok = (Gf_src == aX_tgt) and (Gf_tgt == aY_tgt) and (aY_src == Ff_tgt) and (aX_src == Ff_src)
+                if shape_ok:
+                    messages.append(f"Square for f={f_name} is well-typed (cannot prove equality)")
+                else:
+                    messages.append(f"Square for f={f_name} not well-typed: check component/mapping sources/targets")
+
+            if not messages:
+                messages.append("No morphisms found to check")
+            return messages
+        except Exception as e:
+            logger.error(f"Naturality validation failed for nt={nt_id}: {e}")
+            return [f"Validation failed: {e}"]
+
     def validate_category_structure(self, category_id: int) -> List[str]:
         """
         Validate the mathematical structure of a category.

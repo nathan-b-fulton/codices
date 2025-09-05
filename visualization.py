@@ -28,7 +28,7 @@ EDGE_STYLES = {
 
 
 @st.cache_data
-def get_visualization_data(_dal: CategoryDAL, entity_type: str, entity_id: Optional[int] = None, mode: str = 'standard') -> Dict[str, Any]:
+def get_visualization_data(_dal: CategoryDAL, entity_type: str, entity_id: Optional[int] = None, mode: str = 'standard', overlay: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Query database and return data structure for visualization.
     
@@ -36,7 +36,8 @@ def get_visualization_data(_dal: CategoryDAL, entity_type: str, entity_id: Optio
         dal: Data access layer instance
         entity_type: Type of entity to visualize
         entity_id: Specific entity ID (None for all)
-        mode: Visualization mode ('standard', 'complete', 'meta')
+        mode: Visualization mode ('standard', 'complete', 'meta', 'functor-detail', 'nt-detail')
+        overlay: Optional selection details (e.g., {'nt_id': int, 'morphism_id': int})
         
     Returns:
         Dictionary with nodes, edges, and metadata
@@ -47,7 +48,7 @@ def get_visualization_data(_dal: CategoryDAL, entity_type: str, entity_id: Optio
         elif entity_type == "Functor":
             return get_functor_visualization_data(_dal, mode)
         elif entity_type == "Natural Transformation":
-            return get_natural_transformation_visualization_data(_dal, mode)
+            return get_natural_transformation_visualization_data(_dal, mode, overlay)
         else:
             return get_complete_graph_data(_dal, mode)
             
@@ -179,8 +180,8 @@ def get_functor_visualization_data(dal: CategoryDAL, mode: str) -> Dict[str, Any
         categories = dal.list_categories()
         functors = dal.list_functors()
         
-        nodes = []
-        edges = []
+        nodes: List[Dict[str, Any]] = []
+        edges: List[Dict[str, Any]] = []
         
         # Add categories as nodes
         for cat in categories:
@@ -193,22 +194,72 @@ def get_functor_visualization_data(dal: CategoryDAL, mode: str) -> Dict[str, Any
                 'size': NODE_STYLES['Category']['size']
             })
         
-        # Add functors as edges between categories
+        # Add functors as edges between categories, with tooltip counts
         for functor in functors:
             if functor['source_category'] and functor['target_category']:
                 source_cat_id = next((cat['ID'] for cat in categories if cat['name'] == functor['source_category']), None)
                 target_cat_id = next((cat['ID'] for cat in categories if cat['name'] == functor['target_category']), None)
                 
                 if source_cat_id is not None and target_cat_id is not None:
+                    try:
+                        obj_map_count = len(dal.get_functor_object_mappings(functor['ID']))
+                        morph_map_count = len(dal.get_functor_morphism_mappings(functor['ID']))
+                    except Exception:
+                        obj_map_count = 0
+                        morph_map_count = 0
                     edges.append({
                         'from': f"cat_{source_cat_id}",
                         'to': f"cat_{target_cat_id}",
                         'label': functor['name'],
-                        'title': f"Functor: {functor['name']}\n{functor['description']}",
+                        'title': f"Functor: {functor['name']}\n{functor['description']}\nObjects mapped: {obj_map_count}\nMorphisms mapped: {morph_map_count}",
                         'color': EDGE_STYLES['functor']['color'],
                         'width': EDGE_STYLES['functor']['width'],
                         'arrows': EDGE_STYLES['functor']['arrows']
                     })
+        
+        # Functor-detail mode: show object nodes per category and mapping edges
+        if mode == 'functor-detail':
+            for functor in functors:
+                src_id = functor.get('source_category_id')
+                tgt_id = functor.get('target_category_id')
+                if src_id is None or tgt_id is None:
+                    continue
+                src_objs = dal.get_objects_in_category(src_id)
+                tgt_objs = dal.get_objects_in_category(tgt_id)
+                # Add object nodes with category-specific IDs to avoid collisions
+                for o in src_objs:
+                    nodes.append({
+                        'id': f"obj_{src_id}_{o['ID']}",
+                        'label': o['name'],
+                        'title': f"{functor['source_category']}:{o['name']}",
+                        'color': NODE_STYLES['Object']['color'],
+                        'shape': NODE_STYLES['Object']['shape'],
+                        'size': NODE_STYLES['Object']['size']
+                    })
+                for o in tgt_objs:
+                    nodes.append({
+                        'id': f"obj_{tgt_id}_{o['ID']}",
+                        'label': o['name'],
+                        'title': f"{functor['target_category']}:{o['name']}",
+                        'color': NODE_STYLES['Object']['color'],
+                        'shape': NODE_STYLES['Object']['shape'],
+                        'size': NODE_STYLES['Object']['size']
+                    })
+                # Mapping edges
+                try:
+                    obj_maps = dal.get_functor_object_mappings(functor['ID'])
+                    for m in obj_maps:
+                        edges.append({
+                            'from': f"obj_{src_id}_{m['source_object_id']}",
+                            'to': f"obj_{tgt_id}_{m['target_object_id']}",
+                            'label': functor['name'],
+                            'title': f"{functor['name']}: {m['source_object']} → {m['target_object']}",
+                            'color': '#95a5a6',
+                            'width': 1,
+                            'arrows': 'to'
+                        })
+                except Exception:
+                    pass
         
         metadata = {
             'category_count': len(categories),
@@ -223,7 +274,7 @@ def get_functor_visualization_data(dal: CategoryDAL, mode: str) -> Dict[str, Any
         return {"nodes": [], "edges": [], "metadata": {"error": str(e)}}
 
 
-def get_natural_transformation_visualization_data(dal: CategoryDAL, mode: str) -> Dict[str, Any]:
+def get_natural_transformation_visualization_data(dal: CategoryDAL, mode: str, overlay: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Get visualization data for natural transformations."""
     try:
         functors = dal.list_functors()
@@ -245,17 +296,144 @@ def get_natural_transformation_visualization_data(dal: CategoryDAL, mode: str) -
         
         # Add natural transformations as edges between functors
         for nt in nat_trans:
-            # For now, create placeholder edges
-            # In a full implementation, we'd query for the actual functor relationships
-            edges.append({
-                'from': f"func_0",  # Placeholder
-                'to': f"func_1",    # Placeholder  
-                'label': nt['name'],
-                'title': f"Natural Transformation: {nt['name']}\n{nt['description']}",
-                'color': EDGE_STYLES['natural_transformation']['color'],
-                'width': EDGE_STYLES['natural_transformation']['width'],
-                'arrows': EDGE_STYLES['natural_transformation']['arrows']
-            })
+            src_id = nt.get('source_functor_id')
+            tgt_id = nt.get('target_functor_id')
+            if src_id is not None and tgt_id is not None:
+                edges.append({
+                    'from': f"func_{src_id}",
+                    'to': f"func_{tgt_id}",
+                    'label': nt['name'],
+                    'title': f"Natural Transformation: {nt['name']}\n{nt.get('description','')}",
+                    'color': EDGE_STYLES['natural_transformation']['color'],
+                    'width': EDGE_STYLES['natural_transformation']['width'],
+                    'arrows': EDGE_STYLES['natural_transformation']['arrows']
+                })
+        
+        # nt-detail mode: render components α_X between F(X) and G(X)
+        if mode == 'nt-detail':
+            for nt in nat_trans:
+                comps = dal.get_nt_components(nt['ID'])
+                for comp in comps:
+                    src_obj_id = comp.get('source_object_id')
+                    tgt_obj_id = comp.get('target_object_id')
+                    src_obj_label = comp.get('source_object') or 'F(X)'
+                    tgt_obj_label = comp.get('target_object') or 'G(X)'
+                    if src_obj_id is not None:
+                        nodes.append({
+                            'id': f"nt_{nt['ID']}_obj_{src_obj_id}",
+                            'label': src_obj_label,
+                            'title': f"F(X): {src_obj_label}",
+                            'color': NODE_STYLES['Object']['color'],
+                            'shape': NODE_STYLES['Object']['shape'],
+                            'size': NODE_STYLES['Object']['size']
+                        })
+                    if tgt_obj_id is not None:
+                        nodes.append({
+                            'id': f"nt_{nt['ID']}_obj_{tgt_obj_id}",
+                            'label': tgt_obj_label,
+                            'title': f"G(X): {tgt_obj_label}",
+                            'color': NODE_STYLES['Object']['color'],
+                            'shape': NODE_STYLES['Object']['shape'],
+                            'size': NODE_STYLES['Object']['size']
+                        })
+                    if src_obj_id is not None and tgt_obj_id is not None:
+                        edges.append({
+                            'from': f"nt_{nt['ID']}_obj_{src_obj_id}",
+                            'to': f"nt_{nt['ID']}_obj_{tgt_obj_id}",
+                            'label': nt['name'],
+                            'title': f"α_X: {comp.get('morphism_name','α')}\n{src_obj_label} → {tgt_obj_label}",
+                            'color': '#e67e22',
+                            'width': 2,
+                            'arrows': 'to'
+                        })
+                # Overlay selected commuting square if provided
+                if overlay and overlay.get('nt_id') == nt['ID'] and overlay.get('morphism_id') is not None:
+                    try:
+                        # Lookup functors and source category
+                        F = next((f for f in functors if f['ID'] == nt.get('source_functor_id')), None)
+                        G = next((f for f in functors if f['ID'] == nt.get('target_functor_id')), None)
+                        if F and G:
+                            src_cat_id = F.get('source_category_id')
+                            # Resolve morphism f: X->Y and their object IDs
+                            res = dal.conn.execute(
+                                """MATCH (c:Category)-[:category_morphisms]->(f:Morphism)
+                                       WHERE c.ID = $cid AND f.ID = $fid
+                                       OPTIONAL MATCH (f)-[:morphism_source]->(x:Object)
+                                       OPTIONAL MATCH (f)-[:morphism_target]->(y:Object)
+                                       RETURN x.ID, x.name, y.ID, y.name""",
+                                {"cid": src_cat_id, "fid": int(overlay['morphism_id'])}
+                            )
+                            qr = _get_query_result(res)
+                            if qr.has_next():  # type: ignore
+                                row = qr.get_next()  # type: ignore
+                                X_id, X_name, Y_id, Y_name = row[0], row[1], row[2], row[3]
+                                # Render nodes for F(X), F(Y), G(X), G(Y) using components if present, else labels
+                                # Alpha edges already drawn if components exist
+                                # Draw F(f) and G(f) edges between appropriate nodes
+                                # Resolve target morphisms of F and G
+                                qF = dal.conn.execute(
+                                    """MATCH (sm:Morphism)-[r:functor_morphism_map]->(tm:Morphism)
+                                           WHERE r.via_functor_id = $fid AND sm.ID = $smid
+                                           OPTIONAL MATCH (tm)-[:morphism_source]->(tms:Object)
+                                           OPTIONAL MATCH (tm)-[:morphism_target]->(tmt:Object)
+                                           RETURN tm.ID, tms.ID, tmt.ID, tms.name, tmt.name""",
+                                    {"fid": F['ID'], "smid": int(overlay['morphism_id'])}
+                                )
+                                qG = dal.conn.execute(
+                                    """MATCH (sm:Morphism)-[r:functor_morphism_map]->(tm:Morphism)
+                                           WHERE r.via_functor_id = $gid AND sm.ID = $smid
+                                           OPTIONAL MATCH (tm)-[:morphism_source]->(tms:Object)
+                                           OPTIONAL MATCH (tm)-[:morphism_target]->(tmt:Object)
+                                           RETURN tm.ID, tms.ID, tmt.ID, tms.name, tmt.name""",
+                                    {"gid": G['ID'], "smid": int(overlay['morphism_id'])}
+                                )
+                                qF = _get_query_result(qF)
+                                qG = _get_query_result(qG)
+                                if qF.has_next() and qG.has_next():  # type: ignore
+                                    rF = qF.get_next()  # type: ignore
+                                    rG = qG.get_next()  # type: ignore
+                                    F_src_id, F_tgt_id, F_src_name, F_tgt_name = rF[1], rF[2], rF[3], rF[4]
+                                    G_src_id, G_tgt_id, G_src_name, G_tgt_name = rG[1], rG[2], rG[3], rG[4]
+                                    # Ensure nodes exist
+                                    def ensure_node(node_id: str, label: str, title: str):
+                                        if not any(n['id'] == node_id for n in nodes):
+                                            nodes.append({
+                                                'id': node_id,
+                                                'label': label,
+                                                'title': title,
+                                                'color': NODE_STYLES['Object']['color'],
+                                                'shape': NODE_STYLES['Object']['shape'],
+                                                'size': NODE_STYLES['Object']['size']
+                                            })
+                                    n_FX = f"nt_{nt['ID']}_obj_{F_src_id}"
+                                    n_FY = f"nt_{nt['ID']}_obj_{F_tgt_id}"
+                                    n_GX = f"nt_{nt['ID']}_obj_{G_src_id}"
+                                    n_GY = f"nt_{nt['ID']}_obj_{G_tgt_id}"
+                                    ensure_node(n_FX, F_src_name or 'F(X)', f"F(X): {F_src_name}")
+                                    ensure_node(n_FY, F_tgt_name or 'F(Y)', f"F(Y): {F_tgt_name}")
+                                    ensure_node(n_GX, G_src_name or 'G(X)', f"G(X): {G_src_name}")
+                                    ensure_node(n_GY, G_tgt_name or 'G(Y)', f"G(Y): {G_tgt_name}")
+                                    # Add F(f) and G(f) overlay edges
+                                    edges.append({
+                                        'from': n_FX,
+                                        'to': n_FY,
+                                        'label': 'F(f)',
+                                        'title': f"F(f): {F_src_name} → {F_tgt_name}",
+                                        'color': '#3498db',
+                                        'width': 2,
+                                        'arrows': 'to'
+                                    })
+                                    edges.append({
+                                        'from': n_GX,
+                                        'to': n_GY,
+                                        'label': 'G(f)',
+                                        'title': f"G(f): {G_src_name} → {G_tgt_name}",
+                                        'color': '#9b59b6',
+                                        'width': 2,
+                                        'arrows': 'to'
+                                    })
+                    except Exception:
+                        pass
         
         metadata = {
             'functor_count': len(functors),
@@ -541,8 +719,8 @@ def render_visualization(dal: CategoryDAL, entity_type: str, entity_id: Optional
         with col1:
             mode = st.selectbox(
                 "Visualization Mode",
-                ['standard', 'meta', 'complete'],
-                help="Standard: Mathematical view, Meta: Show all relationships, Complete: All entities"
+                ['standard', 'meta', 'functor-detail', 'nt-detail', 'complete'],
+                help="Standard: Mathematical view, Meta: Show all relationships, Functor-detail: object/morphism mappings, NT-detail: α components, Complete: All entities"
             )
         
         with col2:
@@ -580,8 +758,28 @@ def render_visualization(dal: CategoryDAL, entity_type: str, entity_id: Optional
             'physics_strength': physics_strength
         }
         
+        # Optional NT-detail overlay selection
+        overlay = None
+        if entity_type == "Natural Transformation" and mode == 'nt-detail':
+            try:
+                nts = dal.list_natural_transformations()
+                if nts:
+                    nt_options = {nt['ID']: nt['name'] for nt in nts}
+                    selected_nt = st.selectbox("Natural Transformation", list(nt_options.keys()), format_func=lambda x: nt_options[x])
+                    # Resolve source category via source functor
+                    functors = dal.list_functors()
+                    F = next((f for f in functors if f['ID'] == next((n.get('source_functor_id') for n in nts if n['ID'] == selected_nt), None)), None)
+                    if F and F.get('source_category_id') is not None:
+                        morphs = dal.get_morphisms_in_category(F['source_category_id'])
+                        if morphs:
+                            morph_options = {m['ID']: f"{m['name']} ({m.get('source_object','?')} → {m.get('target_object','?')})" for m in morphs}
+                            selected_m = st.selectbox("Morph. f: X → Y (overlay square)", list(morph_options.keys()), format_func=lambda x: morph_options[x])
+                            overlay = {'nt_id': selected_nt, 'morphism_id': selected_m}
+            except Exception:
+                overlay = None
+        
         # Get visualization data
-        viz_data = get_visualization_data(dal, entity_type, entity_id, mode)
+        viz_data = get_visualization_data(dal, entity_type, entity_id, mode, overlay=overlay)
         
         if 'error' in viz_data['metadata']:
             st.error(f"Visualization error: {viz_data['metadata']['error']}")

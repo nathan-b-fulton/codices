@@ -645,11 +645,51 @@ def render_natural_transformation_form(edit_mode=False):
     dal = get_dal()
     
     try:
+        functors = dal.list_functors()
+        if not functors or len(functors) < 2:
+            st.warning("Need at least 2 functors to create a natural transformation")
+            if st.button("Cancel"):
+                st.session_state.form_mode = None
+                st.rerun()
+            return
+        
+        # Build functor options and show only compatible pairs (same source/target categories)
+        functor_options = {f['ID']: f"{f['name']} (C: {f.get('source_category','?')} → D: {f.get('target_category','?')})" for f in functors}
+        
         with st.form(key="nat_trans_form"):
             name = st.text_input("Natural Transformation Name", placeholder="Enter name")
             description = st.text_area("Description", placeholder="Enter description")
             
-            st.info("Functor selection interface coming soon")
+            # Source functor selector
+            src_functor_id = st.selectbox(
+                "Source Functor (F)",
+                list(functor_options.keys()),
+                format_func=lambda x: functor_options[x],
+                key="nt_src_functor_selector"
+            )
+            
+            # Filter target functors to those with same domain/codomain
+            src_functor = next((f for f in functors if f['ID'] == src_functor_id), None)
+            if src_functor is None:
+                st.error("Selected source functor not found")
+                return
+            
+            compatible_targets = [
+                f for f in functors
+                if f['ID'] != src_functor_id and
+                   f.get('source_category_id') == src_functor.get('source_category_id') and
+                   f.get('target_category_id') == src_functor.get('target_category_id')
+            ]
+            if not compatible_targets:
+                st.warning("No compatible target functors with same domain and codomain")
+            target_ids = [f['ID'] for f in compatible_targets] or list(functor_options.keys())
+            
+            tgt_functor_id = st.selectbox(
+                "Target Functor (G)",
+                target_ids,
+                format_func=lambda x: functor_options[x],
+                key="nt_tgt_functor_selector"
+            )
             
             col1, col2 = st.columns(2)
             
@@ -664,9 +704,21 @@ def render_natural_transformation_form(edit_mode=False):
                 st.rerun()
             
             if submitted:
-                st.info("Natural transformation creation functionality coming soon")
-                st.session_state.form_mode = None
-                
+                if not name.strip():
+                    st.error("Name is required")
+                    return
+                try:
+                    if edit_mode:
+                        st.info("Editing natural transformations coming soon")
+                    else:
+                        nt_id = dal.create_natural_transformation(name, src_functor_id, tgt_functor_id, description)
+                        st.success(f"Natural transformation '{name}' created with ID {nt_id}")
+                        st.session_state.selected_entity_id = nt_id
+                        add_transaction_change(f"Created natural transformation '{name}' (ID: {nt_id})")
+                    st.session_state.form_mode = None
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to save natural transformation: {e}")
     except Exception as e:
         st.error(f"Error in natural transformation form: {e}")
 
@@ -1043,11 +1095,103 @@ def render_functor_components(dal, functor_id):
         st.write(f"**Source Category:** {functor['source_category']}")
         st.write(f"**Target Category:** {functor['target_category']}")
         
-        st.subheader("Object Mappings")
-        st.info("Object mapping interface coming soon")
+        src_cat_id = functor.get('source_category_id')
+        tgt_cat_id = functor.get('target_category_id')
+        if src_cat_id is None or tgt_cat_id is None:
+            st.info("This functor is missing source/target category links.")
+            return
         
+        # Object mappings
+        st.subheader("Object Mappings")
+        try:
+            obj_maps = dal.get_functor_object_mappings(functor_id)
+            if obj_maps:
+                for m in obj_maps:
+                    st.write(f"{m['source_object']} → {m['target_object']}")
+                    with st.expander(f"Manage mapping: {m['source_object']}"):
+                        if st.button("Remove", key=f"remove_fobj_{functor_id}_{m['source_object_id']}"):
+                            try:
+                                dal.remove_functor_object_mapping(functor_id, m['source_object_id'])
+                                st.success("Mapping removed")
+                                add_transaction_change(f"Removed object mapping {m['source_object']} from functor '{functor['name']}'")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to remove mapping: {e}")
+            else:
+                st.info("No object mappings defined")
+            
+            # Add mapping form
+            src_objs = dal.get_objects_in_category(src_cat_id)
+            tgt_objs = dal.get_objects_in_category(tgt_cat_id)
+            with st.form(key=f"add_obj_map_{functor_id}"):
+                src_opts = {o['ID']: f"{o['name']} (ID: {o['ID']})" for o in src_objs}
+                tgt_opts = {o['ID']: f"{o['name']} (ID: {o['ID']})" for o in tgt_objs}
+                src_sel = st.selectbox("Source object (in source category)", list(src_opts.keys()), format_func=lambda x: src_opts[x])
+                tgt_sel = st.selectbox("Target object (in target category)", list(tgt_opts.keys()), format_func=lambda x: tgt_opts[x])
+                colx, coly = st.columns(2)
+                with colx:
+                    add_obj_map = st.form_submit_button("Add Mapping", type="primary")
+                with coly:
+                    cancel_obj_map = st.form_submit_button("Cancel")
+                if cancel_obj_map:
+                    st.experimental_rerun()
+                if add_obj_map:
+                    try:
+                        dal.add_functor_object_mapping(functor_id, src_sel, tgt_sel)
+                        st.success("Object mapping added")
+                        add_transaction_change(f"Added object mapping to functor '{functor['name']}'")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to add object mapping: {e}")
+        except Exception as e:
+            st.error(f"Error loading object mappings: {e}")
+        
+        st.divider()
+        
+        # Morphism mappings
         st.subheader("Morphism Mappings")
-        st.info("Morphism mapping interface coming soon")
+        try:
+            morph_maps = dal.get_functor_morphism_mappings(functor_id)
+            if morph_maps:
+                for m in morph_maps:
+                    st.write(f"{m['source_morphism']} ({m['source_from']} → {m['source_to']}) → {m['target_morphism']} ({m['target_from']} → {m['target_to']})")
+                    with st.expander(f"Manage mapping: {m['source_morphism']}"):
+                        if st.button("Remove", key=f"remove_fmorph_{functor_id}_{m['source_morphism_id']}"):
+                            try:
+                                dal.remove_functor_morphism_mapping(functor_id, m['source_morphism_id'])
+                                st.success("Mapping removed")
+                                add_transaction_change(f"Removed morphism mapping {m['source_morphism']} from functor '{functor['name']}'")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to remove mapping: {e}")
+            else:
+                st.info("No morphism mappings defined")
+            
+            # Add mapping form
+            src_morphs = dal.get_morphisms_in_category(src_cat_id)
+            tgt_morphs = dal.get_morphisms_in_category(tgt_cat_id)
+            with st.form(key=f"add_morph_map_{functor_id}"):
+                src_mopts = {mm['ID']: f"{mm['name']} ({mm.get('source_object','?')} → {mm.get('target_object','?')})" for mm in src_morphs}
+                tgt_mopts = {mm['ID']: f"{mm['name']} ({mm.get('source_object','?')} → {mm.get('target_object','?')})" for mm in tgt_morphs}
+                src_m_sel = st.selectbox("Source morphism (in source category)", list(src_mopts.keys()), format_func=lambda x: src_mopts[x])
+                tgt_m_sel = st.selectbox("Target morphism (in target category)", list(tgt_mopts.keys()), format_func=lambda x: tgt_mopts[x])
+                colm1, colm2 = st.columns(2)
+                with colm1:
+                    add_morph_map = st.form_submit_button("Add Mapping", type="primary")
+                with colm2:
+                    cancel_morph_map = st.form_submit_button("Cancel")
+                if cancel_morph_map:
+                    st.experimental_rerun()
+                if add_morph_map:
+                    try:
+                        dal.add_functor_morphism_mapping(functor_id, src_m_sel, tgt_m_sel)
+                        st.success("Morphism mapping added")
+                        add_transaction_change(f"Added morphism mapping to functor '{functor['name']}'")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to add morphism mapping: {e}")
+        except Exception as e:
+            st.error(f"Error loading morphism mappings: {e}")
         
     except Exception as e:
         st.error(f"Error loading functor components: {e}")
@@ -1067,8 +1211,91 @@ def render_natural_transformation_components(dal, nt_id):
         if nt['description']:
             st.write(nt['description'])
         
+        # Show linked functors if available
+        src = nt.get('source_functor') or nt.get('source_functor_id')
+        tgt = nt.get('target_functor') or nt.get('target_functor_id')
+        if src or tgt:
+            st.write(f"Functors: F = {src} ⇒ G = {tgt}")
+        else:
+            st.info("This natural transformation is not yet linked to functors.")
+        
         st.subheader("Component Morphisms")
-        st.info("Component morphism interface coming soon")
+        
+        # Determine source/target categories via linked functors
+        functors = dal.list_functors()
+        src_functor = next((f for f in functors if f['ID'] == nt.get('source_functor_id')), None)
+        tgt_functor = next((f for f in functors if f['ID'] == nt.get('target_functor_id')), None)
+        if src_functor and tgt_functor:
+            src_cat_id = src_functor.get('source_category_id')
+            tgt_cat_id = tgt_functor.get('target_category_id')
+            
+            # List existing components
+            components = dal.get_nt_components(nt_id)
+            if components:
+                for comp in components:
+                    with st.expander(f"α at X ID {comp['at_object_id']} → {comp['morphism_name']}"):
+                        st.write(f"Morphism: {comp['morphism_name']} ({comp['source_object']} → {comp['target_object']})")
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            if st.button("Remove", key=f"remove_nt_comp_{nt_id}_{comp['at_object_id']}"):
+                                try:
+                                    dal.remove_nt_component(nt_id, comp['at_object_id'])
+                                    st.success("Component removed")
+                                    add_transaction_change(f"Removed NT component at object ID {comp['at_object_id']}")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Failed to remove component: {e}")
+            else:
+                st.info("No components defined yet")
+            
+            st.divider()
+            st.subheader("Add Component α_X")
+            try:
+                src_objects = dal.get_objects_in_category(src_cat_id)
+                tgt_morphisms = dal.get_morphisms_in_category(tgt_cat_id)
+                
+                with st.form(key="nt_add_component_form"):
+                    # Object X selector
+                    obj_opts = {o['ID']: f"{o['name']} (ID: {o['ID']})" for o in src_objects}
+                    obj_id = st.selectbox("Object X in source category", list(obj_opts.keys()), format_func=lambda x: obj_opts[x])
+                    
+                    # Morphism selector (in target category)
+                    morph_opts = {m['ID']: f"{m['name']} ({m.get('source_object','?')} → {m.get('target_object','?')})" for m in tgt_morphisms}
+                    morph_id = st.selectbox("Component morphism in target category", list(morph_opts.keys()), format_func=lambda x: morph_opts[x])
+                    
+                    colc1, colc2 = st.columns(2)
+                    with colc1:
+                        add_submitted = st.form_submit_button("Add Component", type="primary")
+                    with colc2:
+                        cancel_add = st.form_submit_button("Cancel")
+                    if cancel_add:
+                        st.rerun()
+                    if add_submitted:
+                        try:
+                            dal.add_nt_component(nt_id, obj_id, morph_id)
+                            st.success("Component added")
+                            add_transaction_change(f"Added NT component at X={obj_id} using morphism ID {morph_id}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to add component: {e}")
+            except Exception as e:
+                st.error(f"Failed to load component options: {e}")
+            
+            st.divider()
+            st.subheader("Validate")
+            if st.button("Validate Structure", key=f"validate_nt_struct_{nt_id}"):
+                issues = dal.validate_nt_structure(nt_id)
+                if issues:
+                    for msg in issues:
+                        st.warning(msg)
+                else:
+                    st.success("Structure valid")
+            if st.button("Validate Naturality", key=f"validate_nt_nat_{nt_id}"):
+                msgs = dal.validate_naturality(nt_id)
+                for msg in msgs:
+                    st.info(msg)
+        else:
+            st.info("Components require linked functors with categories.")
         
     except Exception as e:
         st.error(f"Error loading natural transformation components: {e}")
