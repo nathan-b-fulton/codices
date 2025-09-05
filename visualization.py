@@ -349,89 +349,65 @@ def get_natural_transformation_visualization_data(dal: CategoryDAL, mode: str, o
                 # Overlay selected commuting square if provided
                 if overlay and overlay.get('nt_id') == nt['ID'] and overlay.get('morphism_id') is not None:
                     try:
-                        # Lookup functors and source category
                         F = next((f for f in functors if f['ID'] == nt.get('source_functor_id')), None)
                         G = next((f for f in functors if f['ID'] == nt.get('target_functor_id')), None)
                         if F and G:
-                            src_cat_id = F.get('source_category_id')
-                            # Resolve morphism f: X->Y and their object IDs
-                            res = dal.conn.execute(
-                                """MATCH (c:Category)-[:category_morphisms]->(f:Morphism)
-                                       WHERE c.ID = $cid AND f.ID = $fid
-                                       OPTIONAL MATCH (f)-[:morphism_source]->(x:Object)
-                                       OPTIONAL MATCH (f)-[:morphism_target]->(y:Object)
-                                       RETURN x.ID, x.name, y.ID, y.name""",
-                                {"cid": src_cat_id, "fid": int(overlay['morphism_id'])}
-                            )
-                            qr = _get_query_result(res)
-                            if qr.has_next():  # type: ignore
-                                row = qr.get_next()  # type: ignore
-                                X_id, X_name, Y_id, Y_name = row[0], row[1], row[2], row[3]
-                                # Render nodes for F(X), F(Y), G(X), G(Y) using components if present, else labels
-                                # Alpha edges already drawn if components exist
-                                # Draw F(f) and G(f) edges between appropriate nodes
-                                # Resolve target morphisms of F and G
-                                qF = dal.conn.execute(
-                                    """MATCH (sm:Morphism)-[r:functor_morphism_map]->(tm:Morphism)
-                                           WHERE r.via_functor_id = $fid AND sm.ID = $smid
-                                           OPTIONAL MATCH (tm)-[:morphism_source]->(tms:Object)
-                                           OPTIONAL MATCH (tm)-[:morphism_target]->(tmt:Object)
-                                           RETURN tm.ID, tms.ID, tmt.ID, tms.name, tmt.name""",
-                                    {"fid": F['ID'], "smid": int(overlay['morphism_id'])}
-                                )
-                                qG = dal.conn.execute(
-                                    """MATCH (sm:Morphism)-[r:functor_morphism_map]->(tm:Morphism)
-                                           WHERE r.via_functor_id = $gid AND sm.ID = $smid
-                                           OPTIONAL MATCH (tm)-[:morphism_source]->(tms:Object)
-                                           OPTIONAL MATCH (tm)-[:morphism_target]->(tmt:Object)
-                                           RETURN tm.ID, tms.ID, tmt.ID, tms.name, tmt.name""",
-                                    {"gid": G['ID'], "smid": int(overlay['morphism_id'])}
-                                )
-                                qF = _get_query_result(qF)
-                                qG = _get_query_result(qG)
-                                if qF.has_next() and qG.has_next():  # type: ignore
-                                    rF = qF.get_next()  # type: ignore
-                                    rG = qG.get_next()  # type: ignore
-                                    F_src_id, F_tgt_id, F_src_name, F_tgt_name = rF[1], rF[2], rF[3], rF[4]
-                                    G_src_id, G_tgt_id, G_src_name, G_tgt_name = rG[1], rG[2], rG[3], rG[4]
-                                    # Ensure nodes exist
-                                    def ensure_node(node_id: str, label: str, title: str):
-                                        if not any(n['id'] == node_id for n in nodes):
-                                            nodes.append({
-                                                'id': node_id,
-                                                'label': label,
-                                                'title': title,
-                                                'color': NODE_STYLES['Object']['color'],
-                                                'shape': NODE_STYLES['Object']['shape'],
-                                                'size': NODE_STYLES['Object']['size']
-                                            })
-                                    n_FX = f"nt_{nt['ID']}_obj_{F_src_id}"
-                                    n_FY = f"nt_{nt['ID']}_obj_{F_tgt_id}"
-                                    n_GX = f"nt_{nt['ID']}_obj_{G_src_id}"
-                                    n_GY = f"nt_{nt['ID']}_obj_{G_tgt_id}"
-                                    ensure_node(n_FX, F_src_name or 'F(X)', f"F(X): {F_src_name}")
-                                    ensure_node(n_FY, F_tgt_name or 'F(Y)', f"F(Y): {F_tgt_name}")
-                                    ensure_node(n_GX, G_src_name or 'G(X)', f"G(X): {G_src_name}")
-                                    ensure_node(n_GY, G_tgt_name or 'G(Y)', f"G(Y): {G_tgt_name}")
-                                    # Add F(f) and G(f) overlay edges
-                                    edges.append({
-                                        'from': n_FX,
-                                        'to': n_FY,
-                                        'label': 'F(f)',
-                                        'title': f"F(f): {F_src_name} → {F_tgt_name}",
-                                        'color': '#3498db',
-                                        'width': 2,
-                                        'arrows': 'to'
-                                    })
-                                    edges.append({
-                                        'from': n_GX,
-                                        'to': n_GY,
-                                        'label': 'G(f)',
-                                        'title': f"G(f): {G_src_name} → {G_tgt_name}",
-                                        'color': '#9b59b6',
-                                        'width': 2,
-                                        'arrows': 'to'
-                                    })
+                            # Find mappings for the selected morphism under F and G
+                            fmaps = dal.get_functor_morphism_mappings(F['ID'])
+                            gmaps = dal.get_functor_morphism_mappings(G['ID'])
+                            fm = next((m for m in fmaps if m['source_morphism_id'] == int(overlay['morphism_id'])), None)
+                            gm = next((m for m in gmaps if m['source_morphism_id'] == int(overlay['morphism_id'])), None)
+                            if fm and gm:
+                                # Resolve object IDs in target category by names
+                                tgt_cat = F.get('target_category_id')
+                                objs = dal.get_objects_in_category(tgt_cat)
+                                def find_obj_id(name: str):
+                                    o = next((o for o in objs if o['name'] == name), None)
+                                    return o['ID'] if o else None
+                                F_src_id = find_obj_id(fm['target_from'])
+                                F_tgt_id = find_obj_id(fm['target_to'])
+                                G_src_id = find_obj_id(gm['target_from'])
+                                G_tgt_id = find_obj_id(gm['target_to'])
+                                F_src_name, F_tgt_name = fm['target_from'], fm['target_to']
+                                G_src_name, G_tgt_name = gm['target_from'], gm['target_to']
+                                # Ensure nodes exist
+                                def ensure_node(node_id: str, label: str, title: str):
+                                    if not any(n['id'] == node_id for n in nodes):
+                                        nodes.append({
+                                            'id': node_id,
+                                            'label': label,
+                                            'title': title,
+                                            'color': NODE_STYLES['Object']['color'],
+                                            'shape': NODE_STYLES['Object']['shape'],
+                                            'size': NODE_STYLES['Object']['size']
+                                        })
+                                n_FX = f"nt_{nt['ID']}_obj_{F_src_id if F_src_id is not None else F_src_name}"
+                                n_FY = f"nt_{nt['ID']}_obj_{F_tgt_id if F_tgt_id is not None else F_tgt_name}"
+                                n_GX = f"nt_{nt['ID']}_obj_{G_src_id if G_src_id is not None else G_src_name}"
+                                n_GY = f"nt_{nt['ID']}_obj_{G_tgt_id if G_tgt_id is not None else G_tgt_name}"
+                                ensure_node(n_FX, F_src_name or 'F(X)', f"F(X): {F_src_name}")
+                                ensure_node(n_FY, F_tgt_name or 'F(Y)', f"F(Y): {F_tgt_name}")
+                                ensure_node(n_GX, G_src_name or 'G(X)', f"G(X): {G_src_name}")
+                                ensure_node(n_GY, G_tgt_name or 'G(Y)', f"G(Y): {G_tgt_name}")
+                                # Add F(f) and G(f) overlay edges
+                                edges.append({
+                                    'from': n_FX,
+                                    'to': n_FY,
+                                    'label': 'F(f)',
+                                    'title': f"F(f): {F_src_name} → {F_tgt_name}",
+                                    'color': '#3498db',
+                                    'width': 2,
+                                    'arrows': 'to'
+                                })
+                                edges.append({
+                                    'from': n_GX,
+                                    'to': n_GY,
+                                    'label': 'G(f)',
+                                    'title': f"G(f): {G_src_name} → {G_tgt_name}",
+                                    'color': '#9b59b6',
+                                    'width': 2,
+                                    'arrows': 'to'
+                                })
                     except Exception:
                         pass
         
